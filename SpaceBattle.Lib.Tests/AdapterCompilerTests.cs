@@ -1,3 +1,5 @@
+using App;
+
 namespace SpaceBattle.Lib.Tests;
 
 public class AdapterCompilerTests
