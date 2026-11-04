@@ -1,5 +1,3 @@
-using System;
-using System.Reflection;
 using System.Text;
 
 namespace SpaceBattle.Lib;
@@ -16,6 +14,7 @@ public class AdapterCodeGenerator
         sb.AppendLine("using System;");
         sb.AppendLine("using SpaceBattle.Lib;");
         sb.AppendLine("using System.Collections.Generic;");
+        sb.AppendLine("using App;");
         sb.AppendLine();
         sb.AppendLine($"public class {className} : {interfaceType.Name}");
         sb.AppendLine("{");
@@ -32,13 +31,13 @@ public class AdapterCodeGenerator
             // генерация тела геттера
             if (prop.CanRead)
             {
-                sb.AppendLine($"        get => IoC.Resolve<{propType}>(\"{interfaceType.Name}.{prop.Name}.Get\", _obj);");
+                sb.AppendLine($"        get => Ioc.Resolve<{propType}>(\"{interfaceType.Name}.{prop.Name}.Get\", _obj);");
             }
 
             // генерация тела сеттера
             if (prop.CanWrite)
             {
-                sb.AppendLine($"        set => IoC.Resolve<ICommand>(\"{interfaceType.Name}.{prop.Name}.Set\", _obj, value).Execute();");
+                sb.AppendLine($"        set => Ioc.Resolve<App.ICommand>(\"{interfaceType.Name}.{prop.Name}.Set\", _obj, value).Execute();");
             }
 
             sb.AppendLine("    }");

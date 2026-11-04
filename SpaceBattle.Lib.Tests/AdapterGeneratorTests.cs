@@ -45,11 +45,11 @@ public class AdapterGeneratorTests
         Assert.Contains("public MovingObjectAdapter(IDictionary<string, object> obj) => _obj = obj;", generatedCode);
 
         // проверка геттера и сеттера для Position
-        Assert.Contains("get => IoC.Resolve<NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
-        Assert.Contains("set => IoC.Resolve<ICommand>(\"IMovingObject.Position.Set\", _obj, value).Execute();", generatedCode);
+        Assert.Contains("get => Ioc.Resolve<NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
+        Assert.Contains("set => Ioc.Resolve<App.ICommand>(\"IMovingObject.Position.Set\", _obj, value).Execute();", generatedCode);
 
         // проверка геттера для Velocity (он не должен иметь сеттера)
-        Assert.Contains("get => IoC.Resolve<NVector>(\"IMovingObject.Velocity.Get\", _obj);", generatedCode);
+        Assert.Contains("get => Ioc.Resolve<NVector>(\"IMovingObject.Velocity.Get\", _obj);", generatedCode);
         Assert.DoesNotContain("IMovingObject.Velocity.Set", generatedCode);
     }
 }
