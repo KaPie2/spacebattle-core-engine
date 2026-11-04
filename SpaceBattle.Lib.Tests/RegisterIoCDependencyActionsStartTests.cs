@@ -10,6 +10,9 @@ public class RegisterIoCDependencyActionsStartTests
     {
         new InitCommand().Execute();
 
+        var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", testScope).Execute();
+
         var mockReceiver = new Mock<ICommandReceiver>();
         Ioc.Resolve<App.ICommand>("IoC.Register", "Game.CommandReceiver",
             (object[] _) => mockReceiver.Object).Execute();
