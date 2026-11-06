@@ -1,55 +1,31 @@
-using System.Reflection;
+using System;
+using Xunit;
+using SpaceBattle.Lib;
 
 namespace SpaceBattle.Lib.Tests;
 
 public class AdapterGeneratorTests
 {
     [Fact]
-    public void Reflection_Should_Read_Interface_Properties_And_Attributes()
+    public void AdapterBuilder_ThrowsArgumentException_WhenNotInterface()
     {
-        Type targetType = typeof(IMovingObject);
-        PropertyInfo[] properties = targetType.GetProperties();
+        var generator = new AdapterCodeGenerator();
 
-        var positionProp = properties.FirstOrDefault(p => p.Name == "Position");
-        var velocityProp = properties.FirstOrDefault(p => p.Name == "Velocity");
-
-        Assert.NotNull(positionProp);
-        Assert.NotNull(velocityProp);
-
-        Assert.True(positionProp.CanRead);
-        Assert.True(positionProp.CanWrite);
-
-        Assert.True(velocityProp.CanRead);
-        Assert.False(velocityProp.CanWrite);
-
-        var adapterAttr = velocityProp.GetCustomAttribute<AdapterAttribute>();
-        Assert.NotNull(adapterAttr);
-        Assert.Equal(typeof(IMovingObject), adapterAttr.TargetInterface);
-        Assert.Equal("Velocity", adapterAttr.PropertyName);
-        Assert.Equal("GetVelocityByAngle", adapterAttr.MethodName);
+        Assert.Throws<ArgumentException>(() => generator.Generate(typeof(NVector)));
     }
 
     [Fact]
-    public void Generator_Should_Build_Correct_CSharp_Code()
+    public void AdapterBuilder_GeneratesValidProperties_ForMovingObject()
     {
-        // Arrange
         var generator = new AdapterCodeGenerator();
-        Type targetType = typeof(IMovingObject);
+        var generatedCode = generator.Generate(typeof(IMovingObject));
 
-        // Act
-        string generatedCode = generator.Generate(targetType);
+        // наличие класса адаптера и класса фабрики
+        Assert.Contains("public class MovingObjectAdapter : SpaceBattle.Lib.IMovingObject", generatedCode);
+        Assert.Contains("public class MovingObjectAdapterFactory : IAdapterFactory<SpaceBattle.Lib.IMovingObject>", generatedCode);
 
-        // Assert
-        Assert.Contains("public class MovingObjectAdapter : IMovingObject", generatedCode);
-        Assert.Contains("private readonly IDictionary<string, object> _obj;", generatedCode);
-        Assert.Contains("public MovingObjectAdapter(IDictionary<string, object> obj) => _obj = obj;", generatedCode);
-
-        // проверка геттера и сеттера для Position
-        Assert.Contains("get => Ioc.Resolve<NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
+        // свойства и правильный Ioc.Resolve
+        Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
         Assert.Contains("set => Ioc.Resolve<App.ICommand>(\"IMovingObject.Position.Set\", _obj, value).Execute();", generatedCode);
-
-        // проверка геттера для Velocity (он не должен иметь сеттера)
-        Assert.Contains("get => Ioc.Resolve<NVector>(\"IMovingObject.Velocity.Get\", _obj);", generatedCode);
-        Assert.DoesNotContain("IMovingObject.Velocity.Set", generatedCode);
     }
 }

@@ -1,11 +1,15 @@
+using System;
+using System.Collections.Generic;
 using App;
 using App.Scopes;
+using Xunit;
+using SpaceBattle.Lib;
 
 namespace SpaceBattle.Lib.Tests;
 
-public class AdapterBuilderTests
+public class RegisterAdapterCommandTests
 {
-    public AdapterBuilderTests()
+    public RegisterAdapterCommandTests()
     {
         new InitCommand().Execute();
         var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
@@ -13,14 +17,14 @@ public class AdapterBuilderTests
     }
 
     [Fact]
-    public void Builder_Should_Compile_And_Cache_Adapter_Factory_In_IoC()
+    public void RegisterAdapterCommand_RegistersInIoC_AndCreatesViaResolve()
     {
         // Arrange
-        var builder = new AdapterBuilder();
+        var command = new RegisterAdapterCommand<IMovingObject>();
         var state = new Dictionary<string, object>();
 
         // Act
-        builder.BuildAndRegister(typeof(IMovingObject));
+        command.Execute();
 
         // Assert
         var adapter = Ioc.Resolve<IMovingObject>("Adapter.IMovingObject", state);

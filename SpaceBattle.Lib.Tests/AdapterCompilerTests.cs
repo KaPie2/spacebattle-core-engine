@@ -1,32 +1,30 @@
-using App;
+using System;
+using System.Collections.Generic;
+using Xunit;
+using SpaceBattle.Lib;
 
 namespace SpaceBattle.Lib.Tests;
 
 public class AdapterCompilerTests
 {
     [Fact]
-    public void Compiler_Should_Create_Valid_Type_From_Generated_Code()
+    public void RoslynCompiler_EmitsAssemblyAndCreatesInstance()
     {
-        // генерация строки кода
         var generator = new AdapterCodeGenerator();
-        Type targetInterface = typeof(IMovingObject);
-        string generatedCode = generator.Generate(targetInterface);
+        string generatedCode = generator.Generate(typeof(IMovingObject));
 
-        // компиляция строки в реальный тип
         var compiler = new AdapterCompiler();
-        string expectedClassName = "MovingObjectAdapter";
-        Type compiledType = compiler.Compile(generatedCode, expectedClassName);
+        string expectedFactoryName = "SpaceBattle.Lib.Generated.MovingObjectAdapterFactory";
+        Type compiledFactoryType = compiler.Compile(generatedCode, expectedFactoryName);
 
-        Assert.NotNull(compiledType);
+        Assert.NotNull(compiledFactoryType);
+        Assert.True(typeof(IAdapterFactory<IMovingObject>).IsAssignableFrom(compiledFactoryType));
 
-        // проверка, что сгенерированный класс действительно реализует IMovingObject
-        Assert.True(typeof(IMovingObject).IsAssignableFrom(compiledType));
-
-        // попытка создать экземпляр скомпилированного класса
+        var factory = (IAdapterFactory<IMovingObject>)Activator.CreateInstance(compiledFactoryType)!;
         var state = new Dictionary<string, object>();
-        var adapterInstance = Activator.CreateInstance(compiledType, state);
+        var adapter = factory.Create(state);
 
-        Assert.NotNull(adapterInstance);
-        Assert.IsAssignableFrom<IMovingObject>(adapterInstance);
+        Assert.NotNull(adapter);
+        Assert.IsAssignableFrom<IMovingObject>(adapter);
     }
 }
