@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Reflection;
 using App;
 
 namespace SpaceBattle.Lib;
@@ -13,24 +13,48 @@ public class RegisterAdapterCommand<T> : ICommand
         var generator = new AdapterCodeGenerator();
         var compiler = new AdapterCompiler();
 
-        // генерирация кода (сразу 2 класса: адаптер и фабрика)
+        // генерация исходного кода адаптера и фабрики
         var sourceCode = generator.Generate(interfaceType);
 
-        // имя сгенерированного класса фабрики
+        // определение имени типа фабрики
         string cleanName = interfaceType.Name.StartsWith("I") ? interfaceType.Name.Substring(1) : interfaceType.Name;
         string factoryClassName = $"SpaceBattle.Lib.Generated.{cleanName}AdapterFactory";
 
-        // компиляция
+        // компиляция сгенерированного кода в сборку памяти
         var compiledFactoryType = compiler.Compile(sourceCode, factoryClassName);
 
-        // создание экземпляра фабрики через Activator
+        // создание экземпляра фабрики
         var factory = (IAdapterFactory<T>)Activator.CreateInstance(compiledFactoryType)!;
 
-        // регистрация в IoC
+        // регистрация фабрики адаптера по основному контракту
+        Ioc.Resolve<App.ICommand>("IoC.Register", $"Adapters.{interfaceType.Name}", (object[] args) =>
+        {
+            var dict = (IDictionary<string, object>)args[0];
+            return factory.Create(dict);
+        }).Execute();
+
+        // регистрация фабрики адаптера по альтернативному ключу
         Ioc.Resolve<App.ICommand>("IoC.Register", $"Adapter.{interfaceType.Name}", (object[] args) =>
         {
             var dict = (IDictionary<string, object>)args[0];
             return factory.Create(dict);
         }).Execute();
+
+        // регистрация стратегий вычислений из атрибутов адаптера
+        foreach (var prop in interfaceType.GetProperties())
+        {
+            var attr = prop.GetCustomAttribute<AdapterAttribute>();
+            if (attr != null && attr.StrategyType != null && !string.IsNullOrEmpty(attr.MethodName))
+            {
+                var method = attr.StrategyType.GetMethod(attr.MethodName, BindingFlags.Public | BindingFlags.Static);
+                if (method != null)
+                {
+                    Ioc.Resolve<App.ICommand>("IoC.Register", $"{attr.TargetInterface.Name}.{attr.PropertyName}.{attr.MethodName}", (object[] args) =>
+                    {
+                        return method.Invoke(null, new object[] { args })!;
+                    }).Execute();
+                }
+            }
+        }
     }
 }

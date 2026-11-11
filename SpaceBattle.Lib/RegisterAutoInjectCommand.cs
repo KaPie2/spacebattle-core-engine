@@ -18,31 +18,50 @@ public class RegisterAutoInjectCommand : ICommand
 
     public void Execute()
     {
-        // регистрация умной стратегии создания команды в IoC
+        // выбор конструктора с максимальным количеством параметров
+        var constructor = _commandType.GetConstructors()
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault() ?? throw new InvalidOperationException($"Тип {_commandType.Name} не содержит публичных конструкторов.");
+
+        // кэширование информации о типах параметров конструктора
+        var parameters = constructor.GetParameters();
+        var parameterTypes = parameters.Select(p => p.ParameterType).ToArray();
+
+        // регистрация стратегии автоматического внедрения зависимостей в ioc
         Ioc.Resolve<App.ICommand>("IoC.Register", _commandName, (object[] args) =>
         {
-            var targetObject = (IDictionary<string, object>)args[0];
-            var constructor = _commandType.GetConstructors().First();
-            var parameters = constructor.GetParameters();
-            var resolvedArgs = new object[parameters.Length];
+            // проверка наличия целевого объекта
+            if (args == null || args.Length == 0)
+                throw new ArgumentException("Отсутствуют входные аргументы для создания команды.", nameof(args));
 
-            // перебор параметров конструктора и автоматическая инъекция
-            for (int i = 0; i < parameters.Length; i++)
+            var targetObject = (IDictionary<string, object>)args[0];
+            var resolvedArgs = new object[parameterTypes.Length];
+
+            // подстановка аргументов конструктора
+            for (int i = 0; i < parameterTypes.Length; i++)
             {
-                var paramType = parameters[i].ParameterType;
+                var paramType = parameterTypes[i];
 
                 if (paramType.IsInterface)
                 {
-                    // автоматическое разрешение интерфейса через ранее созданную фабрику адаптеров
-                    resolvedArgs[i] = Ioc.Resolve<object>($"Adapter.{paramType.Name}", targetObject);
+                    // разрешение адаптера по зарегистрированным ключам
+                    try
+                    {
+                        resolvedArgs[i] = Ioc.Resolve<object>($"Adapter.{paramType.Name}", targetObject);
+                    }
+                    catch
+                    {
+                        resolvedArgs[i] = Ioc.Resolve<object>($"Adapters.{paramType.Name}", targetObject);
+                    }
                 }
                 else
                 {
-                    // фолбэк для обычных типов
+                    // разрешение значения для неинтерфейсного параметра
                     resolvedArgs[i] = Ioc.Resolve<object>(paramType.Name, targetObject);
                 }
             }
 
+            // создание экземпляра команды
             return Activator.CreateInstance(_commandType, resolvedArgs)!;
         }).Execute();
     }

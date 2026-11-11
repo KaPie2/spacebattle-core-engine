@@ -11,6 +11,7 @@ public class RegisterAdapterCommandTests
 {
     public RegisterAdapterCommandTests()
     {
+        // инициализация скоупов и установка тестового контекста
         new InitCommand().Execute();
         var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", testScope).Execute();
@@ -19,17 +20,25 @@ public class RegisterAdapterCommandTests
     [Fact]
     public void RegisterAdapterCommand_RegistersInIoC_AndCreatesViaResolve()
     {
-        // Arrange
+        // arrange (подготовка команды регистрации адаптера)
         var command = new RegisterAdapterCommand<IMovingObject>();
         var state = new Dictionary<string, object>();
 
-        // Act
+        // act (выполнение регистрации)
         command.Execute();
 
-        // Assert
-        var adapter = Ioc.Resolve<IMovingObject>("Adapter.IMovingObject", state);
+        // assert (проверка разрешения по основному контракту)
+        var adapterPlural = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", state);
+        Assert.NotNull(adapterPlural);
+        Assert.IsAssignableFrom<IMovingObject>(adapterPlural);
 
-        Assert.NotNull(adapter);
-        Assert.IsAssignableFrom<IMovingObject>(adapter);
+        // assert (проверка разрешения по альтернативному ключу)
+        var adapterSingular = Ioc.Resolve<IMovingObject>("Adapter.IMovingObject", state);
+        Assert.NotNull(adapterSingular);
+        Assert.IsAssignableFrom<IMovingObject>(adapterSingular);
+
+        // assert (проверка разрешения вычисляемого свойства через стратегию атрибута)
+        var velocity = adapterPlural.Velocity;
+        Assert.NotNull(velocity);
     }
 }
