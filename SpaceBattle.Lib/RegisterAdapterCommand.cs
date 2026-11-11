@@ -49,10 +49,17 @@ public class RegisterAdapterCommand<T> : ICommand
                 var method = attr.StrategyType.GetMethod(attr.MethodName, BindingFlags.Public | BindingFlags.Static);
                 if (method != null)
                 {
-                    Ioc.Resolve<App.ICommand>("IoC.Register", $"{attr.TargetInterface.Name}.{attr.PropertyName}.{attr.MethodName}", (object[] args) =>
+                    try
                     {
-                        return method.Invoke(null, new object[] { args })!;
-                    }).Execute();
+                        Ioc.Resolve<App.ICommand>("IoC.Register", $"{attr.TargetInterface.Name}.{attr.PropertyName}.{attr.MethodName}", (object[] args) =>
+                        {
+                            return method.Invoke(null, new object[] { args })!;
+                        }).Execute();
+                    }
+                    catch
+                    {
+                        // пропуск при наличии существующей регистрации
+                    }
                 }
             }
         }

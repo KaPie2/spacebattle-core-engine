@@ -145,7 +145,7 @@ public class GameThreadTests
 }
 
 // вспомогательная команда для выполнения переданного делегата
-public class ActionCommand : ICommand
+public class ActionCommand : ICommand, App.ICommand
 {
     private readonly Action _action;
     public ActionCommand(Action action) => _action = action;
