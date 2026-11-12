@@ -11,6 +11,7 @@ public interface ITransactionManager
     void BeginTransaction();
     void Commit();
     void Rollback();
+    void ClearLog();
 
     IUObject CreateTransactionalObject(IUObject target);
     object GetValue(IUObject target, string key);

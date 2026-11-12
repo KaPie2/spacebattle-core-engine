@@ -4,26 +4,45 @@ namespace SpaceBattle.Lib;
 
 public class TransactionManager : ITransactionManager
 {
+    public const int DefaultMaxLogEntries = 10_000;
     private static readonly object RemovedSentinel = new();
 
-    private readonly Dictionary<IUObject, Dictionary<string, object?>> _pendingChanges =
-        new(ReferenceEqualityComparer.Instance);
-    private readonly List<TransactionLogEntry> _currentEntries = new();
-    private readonly List<TransactionLogEntry> _log = new();
+    private sealed class TransactionFrame
+    {
+        public long TransactionId { get; }
+        public Dictionary<IUObject, Dictionary<string, object?>> Changes { get; } =
+            new(ReferenceEqualityComparer.Instance);
+        public List<TransactionLogEntry> Entries { get; } = new();
 
-    public bool IsActive { get; private set; }
-    public long CurrentTransactionId { get; private set; }
+        public TransactionFrame(long transactionId)
+        {
+            TransactionId = transactionId;
+        }
+    }
+
+    private readonly Stack<TransactionFrame> _frames = new();
+    private readonly List<TransactionLogEntry> _log = new();
+    private readonly int _maxLogEntries;
+    private long _nextTransactionId;
+
+    public TransactionManager(int maxLogEntries = DefaultMaxLogEntries)
+    {
+        if (maxLogEntries <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxLogEntries), "Max log entries must be positive.");
+        }
+
+        _maxLogEntries = maxLogEntries;
+    }
+
+    public bool IsActive => _frames.Count > 0;
+    public long CurrentTransactionId => _frames.Count > 0 ? _frames.Peek().TransactionId : 0;
     public IReadOnlyList<TransactionLogEntry> Log => _log;
 
     public void BeginTransaction()
     {
-        if (IsActive)
-        {
-            throw new InvalidOperationException("A transaction is already active.");
-        }
-
-        CurrentTransactionId++;
-        IsActive = true;
+        _nextTransactionId++;
+        _frames.Push(new TransactionFrame(_nextTransactionId));
     }
 
     public void Commit()
@@ -33,27 +52,30 @@ public class TransactionManager : ITransactionManager
             throw new InvalidOperationException("No active transaction to commit.");
         }
 
-        foreach (var (target, changes) in _pendingChanges)
+        var frame = _frames.Pop();
+
+        if (_frames.Count > 0)
         {
-            foreach (var (key, value) in changes)
+            var parent = _frames.Peek();
+            foreach (var (target, changes) in frame.Changes)
             {
-                if (ReferenceEquals(value, RemovedSentinel))
+                if (!parent.Changes.TryGetValue(target, out var parentChanges))
                 {
-                    target.Remove(key);
+                    parentChanges = new Dictionary<string, object?>();
+                    parent.Changes[target] = parentChanges;
                 }
-                else
+
+                foreach (var (key, value) in changes)
                 {
-                    target.SetProperty(key, value!);
+                    parentChanges[key] = value;
                 }
             }
+
+            parent.Entries.AddRange(frame.Entries);
+            return;
         }
 
-        foreach (var entry in _currentEntries)
-        {
-            entry.Status = TransactionStatus.Success;
-        }
-
-        ResetCurrentTransaction();
+        ApplyAtomically(frame);
     }
 
     public void Rollback()
@@ -63,13 +85,14 @@ public class TransactionManager : ITransactionManager
             throw new InvalidOperationException("No active transaction to roll back.");
         }
 
-        foreach (var entry in _currentEntries)
+        var frame = _frames.Pop();
+        foreach (var entry in frame.Entries)
         {
             entry.Status = TransactionStatus.Fail;
         }
-
-        ResetCurrentTransaction();
     }
+
+    public void ClearLog() => _log.Clear();
 
     public IUObject CreateTransactionalObject(IUObject target)
     {
@@ -113,18 +136,7 @@ public class TransactionManager : ITransactionManager
         }
 
         object? oldValue = TryGetValue(target, key, out var existing) ? existing : null;
-
-        if (!_pendingChanges.TryGetValue(target, out var changes))
-        {
-            changes = new Dictionary<string, object?>();
-            _pendingChanges[target] = changes;
-        }
-
-        changes[key] = value;
-
-        var entry = new TransactionLogEntry(CurrentTransactionId, target, key, oldValue, value, TransactionStatus.Pending);
-        _currentEntries.Add(entry);
-        _log.Add(entry);
+        RecordPendingChange(target, key, oldValue, value, value);
     }
 
     public bool TryGetValue(IUObject target, string key, [MaybeNullWhen(false)] out object value)
@@ -138,17 +150,20 @@ public class TransactionManager : ITransactionManager
             throw new ArgumentNullException(nameof(key));
         }
 
-        if (IsActive && _pendingChanges.TryGetValue(target, out var changes) &&
-            changes.TryGetValue(key, out var cachedValue))
+        foreach (var frame in _frames)
         {
-            if (ReferenceEquals(cachedValue, RemovedSentinel))
+            if (frame.Changes.TryGetValue(target, out var changes) &&
+                changes.TryGetValue(key, out var cachedValue))
             {
-                value = default;
-                return false;
-            }
+                if (ReferenceEquals(cachedValue, RemovedSentinel))
+                {
+                    value = default;
+                    return false;
+                }
 
-            value = cachedValue!;
-            return true;
+                value = cachedValue!;
+                return true;
+            }
         }
 
         return target.TryGetValue(key, out value);
@@ -180,17 +195,7 @@ public class TransactionManager : ITransactionManager
             return false;
         }
 
-        if (!_pendingChanges.TryGetValue(target, out var changes))
-        {
-            changes = new Dictionary<string, object?>();
-            _pendingChanges[target] = changes;
-        }
-
-        changes[key] = RemovedSentinel;
-
-        var entry = new TransactionLogEntry(CurrentTransactionId, target, key, existing, null, TransactionStatus.Pending);
-        _currentEntries.Add(entry);
-        _log.Add(entry);
+        RecordPendingChange(target, key, existing, null, RemovedSentinel);
         return true;
     }
 
@@ -203,17 +208,20 @@ public class TransactionManager : ITransactionManager
 
         var keys = new HashSet<string>(target.Keys);
 
-        if (IsActive && _pendingChanges.TryGetValue(target, out var changes))
+        foreach (var frame in _frames.Reverse())
         {
-            foreach (var (key, value) in changes)
+            if (frame.Changes.TryGetValue(target, out var changes))
             {
-                if (ReferenceEquals(value, RemovedSentinel))
+                foreach (var (key, value) in changes)
                 {
-                    keys.Remove(key);
-                }
-                else
-                {
-                    keys.Add(key);
+                    if (ReferenceEquals(value, RemovedSentinel))
+                    {
+                        keys.Remove(key);
+                    }
+                    else
+                    {
+                        keys.Add(key);
+                    }
                 }
             }
         }
@@ -221,10 +229,95 @@ public class TransactionManager : ITransactionManager
         return keys.ToList();
     }
 
-    private void ResetCurrentTransaction()
+    private void RecordPendingChange(
+        IUObject target,
+        string key,
+        object? oldValue,
+        object? loggedNewValue,
+        object? cachedValue)
     {
-        _pendingChanges.Clear();
-        _currentEntries.Clear();
-        IsActive = false;
+        var frame = _frames.Peek();
+
+        if (!frame.Changes.TryGetValue(target, out var changes))
+        {
+            changes = new Dictionary<string, object?>();
+            frame.Changes[target] = changes;
+        }
+
+        changes[key] = cachedValue;
+
+        var entry = new TransactionLogEntry(
+            frame.TransactionId,
+            target,
+            key,
+            oldValue,
+            loggedNewValue,
+            TransactionStatus.Pending);
+
+        frame.Entries.Add(entry);
+        AppendLog(entry);
+    }
+
+    private void AppendLog(TransactionLogEntry entry)
+    {
+        if (_log.Count >= _maxLogEntries)
+        {
+            _log.RemoveAt(0);
+        }
+
+        _log.Add(entry);
+    }
+
+    private static void ApplyAtomically(TransactionFrame frame)
+    {
+        var appliedBackups = new List<(IUObject Target, string Key, bool Existed, object? OriginalValue)>();
+
+        try
+        {
+            foreach (var (target, changes) in frame.Changes)
+            {
+                foreach (var (key, value) in changes)
+                {
+                    bool existed = target.TryGetValue(key, out var originalValue);
+                    appliedBackups.Add((target, key, existed, originalValue));
+
+                    if (ReferenceEquals(value, RemovedSentinel))
+                    {
+                        target.Remove(key);
+                    }
+                    else
+                    {
+                        target.SetProperty(key, value!);
+                    }
+                }
+            }
+
+            foreach (var entry in frame.Entries)
+            {
+                entry.Status = TransactionStatus.Success;
+            }
+        }
+        catch
+        {
+            for (int i = appliedBackups.Count - 1; i >= 0; i--)
+            {
+                var (target, key, existed, originalValue) = appliedBackups[i];
+                if (existed)
+                {
+                    target.SetProperty(key, originalValue!);
+                }
+                else
+                {
+                    target.Remove(key);
+                }
+            }
+
+            foreach (var entry in frame.Entries)
+            {
+                entry.Status = TransactionStatus.Fail;
+            }
+
+            throw;
+        }
     }
 }

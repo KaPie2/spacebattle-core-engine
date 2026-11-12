@@ -166,6 +166,33 @@ public class ThreadStopCommandsTests
     }
 
     [Fact]
+    public void SoftStopCommand_RealThread_DrainsThrowingCommandWithScopedExceptionHandler()
+    {
+        var gameScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", gameScope).Execute();
+
+        var handled = new ManualResetEvent(false);
+        Ioc.Resolve<App.ICommand>(
+            "IoC.Register",
+            "Exception.Handler",
+            (object[] args) => new DelegateCommand(() => handled.Set())
+        ).Execute();
+
+        var afterThrowExecuted = new ManualResetEvent(false);
+        var thread = new TestGameThread(gameScope);
+
+        thread.Queue.Add(new SoftStopCommand(thread));
+        thread.Queue.Add(new DelegateCommand(() => throw new InvalidOperationException("draining error")));
+        thread.Queue.Add(new DelegateCommand(() => afterThrowExecuted.Set()));
+
+        thread.Start();
+        thread.Join(TimeSpan.FromSeconds(3));
+
+        Assert.True(handled.WaitOne(0));
+        Assert.True(afterThrowExecuted.WaitOne(0));
+    }
+
+    [Fact]
     public void RegisterIoCDependencyThreadStopCommands_ResolvesHardAndSoftStop()
     {
         var threadMock = new Mock<IGameThread>();
@@ -189,13 +216,15 @@ public class ThreadStopCommandsTests
     private sealed class TestGameThread : IGameThread
     {
         private readonly Thread _thread;
+        private readonly object? _initialScope;
         private volatile bool _stopRequested;
         private Action _strategy;
 
         public BlockingCollection<ICommand> Queue { get; } = new();
 
-        public TestGameThread()
+        public TestGameThread(object? initialScope = null)
         {
+            _initialScope = initialScope;
             _strategy = DefaultLoop;
             _thread = new Thread(Run);
         }
@@ -210,6 +239,11 @@ public class ThreadStopCommandsTests
 
         private void Run()
         {
+            if (_initialScope is not null)
+            {
+                Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", _initialScope).Execute();
+            }
+
             while (!_stopRequested)
             {
                 _strategy();

@@ -71,8 +71,19 @@ public class TransactionalUObject : IUObject
             throw new ArgumentNullException(nameof(array));
         }
 
+        if (arrayIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        }
+
+        var keys = Keys;
+        if (array.Length - arrayIndex < keys.Count)
+        {
+            throw new ArgumentException("Destination array is not long enough.", nameof(array));
+        }
+
         int index = arrayIndex;
-        foreach (var key in Keys)
+        foreach (var key in keys)
         {
             array[index++] = new KeyValuePair<string, object>(key, GetProperty(key));
         }

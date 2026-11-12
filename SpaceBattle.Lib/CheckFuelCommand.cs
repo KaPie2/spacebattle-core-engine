@@ -11,12 +11,17 @@ public class CheckFuelCommand : ICommand
 
     public void Execute()
     {
-        if (_fuelable.FuelConsumption < 0)
+        EnsureSufficientFuel(_fuelable);
+    }
+
+    internal static void EnsureSufficientFuel(IFuelable fuelable)
+    {
+        if (fuelable.FuelConsumption < 0)
         {
             throw new InvalidOperationException("Fuel consumption cannot be negative");
         }
 
-        if (_fuelable.FuelLevel < _fuelable.FuelConsumption)
+        if (fuelable.FuelLevel < fuelable.FuelConsumption)
         {
             throw new InvalidOperationException("Not enough fuel");
         }

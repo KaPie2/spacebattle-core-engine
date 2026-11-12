@@ -17,9 +17,13 @@ public class TransactionTests
     [Fact]
     public void TransactionManager_StateTransitions_InvalidCallsThrow()
     {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TransactionManager(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new TransactionManager(-5));
+
         var manager = new TransactionManager();
 
         Assert.False(manager.IsActive);
+        Assert.Equal(0, manager.CurrentTransactionId);
         Assert.Throws<InvalidOperationException>(() => manager.Commit());
         Assert.Throws<InvalidOperationException>(() => manager.Rollback());
 
@@ -27,10 +31,9 @@ public class TransactionTests
         Assert.True(manager.IsActive);
         Assert.Equal(1, manager.CurrentTransactionId);
 
-        Assert.Throws<InvalidOperationException>(() => manager.BeginTransaction());
-
         manager.Rollback();
         Assert.False(manager.IsActive);
+        Assert.Equal(0, manager.CurrentTransactionId);
     }
 
     [Fact]
@@ -307,6 +310,155 @@ public class TransactionTests
         Assert.False(manager.IsActive);
         Assert.Equal(2, manager.Log.Count);
         Assert.All(manager.Log, e => Assert.Equal(TransactionStatus.Success, e.Status));
+    }
+
+    [Fact]
+    public void TransactionManager_NestedTransactions_CommitAndRollbackSavepoints()
+    {
+        var realObj = new UObject { ["A"] = 1 };
+        var manager = new TransactionManager();
+        var txObj = manager.CreateTransactionalObject(realObj);
+
+        manager.BeginTransaction(); // tx 1
+        txObj["A"] = 10;
+
+        // Inner transaction 2 rolls back
+        manager.BeginTransaction(); // tx 2
+        txObj["A"] = 999;
+        txObj["B"] = 20;
+        Assert.Equal(999, txObj["A"]);
+        manager.Rollback();
+
+        // Outer transaction still active with tx 1 value
+        Assert.True(manager.IsActive);
+        Assert.Equal(10, txObj["A"]);
+        Assert.False(txObj.ContainsKey("B"));
+
+        // Inner transaction 3 commits into outer tx 1
+        manager.BeginTransaction(); // tx 3
+        txObj["C"] = 30;
+        manager.Commit();
+
+        // Real object still untouched until outer commit
+        Assert.Equal(1, realObj["A"]);
+        Assert.False(realObj.ContainsKey("C"));
+
+        manager.Commit();
+
+        Assert.False(manager.IsActive);
+        Assert.Equal(10, realObj["A"]);
+        Assert.Equal(30, realObj["C"]);
+        Assert.False(realObj.ContainsKey("B"));
+    }
+
+    [Fact]
+    public void TransactionManager_CommitFailsMidApply_RestoresAllPreviousTargets()
+    {
+        var target1 = new UObject { ["Fuel"] = 100 };
+
+        var target2Mock = new Mock<IUObject>();
+        target2Mock.SetupGet(t => t.Keys).Returns(Array.Empty<string>());
+        target2Mock.Setup(t => t.TryGetValue(It.IsAny<string>(), out It.Ref<object?>.IsAny))
+            .Returns(false);
+        target2Mock.Setup(t => t.SetProperty("Pos", It.IsAny<object>()))
+            .Throws(new InvalidOperationException("Disk/storage failure on commit"));
+
+        var manager = new TransactionManager();
+        var tx1 = manager.CreateTransactionalObject(target1);
+        var tx2 = manager.CreateTransactionalObject(target2Mock.Object);
+
+        manager.BeginTransaction();
+        tx1["Fuel"] = 50;
+        tx1["TempKey"] = "added";
+        tx2["Pos"] = new NVector(1, 1);
+
+        Assert.Throws<InvalidOperationException>(() => manager.Commit());
+
+        // Target 1 must be restored to original state
+        Assert.Equal(100, target1["Fuel"]);
+        Assert.False(target1.ContainsKey("TempKey"));
+        Assert.False(manager.IsActive);
+        Assert.All(manager.Log, e => Assert.Equal(TransactionStatus.Fail, e.Status));
+    }
+
+    [Fact]
+    public void TransactionManager_LogBoundedAndClearable_EntriesExposeMetadata()
+    {
+        var realObj = new UObject { ["X"] = 1 };
+        var manager = new TransactionManager(maxLogEntries: 2);
+        var txObj = manager.CreateTransactionalObject(realObj);
+
+        manager.BeginTransaction();
+        txObj["X"] = 2;
+        txObj["X"] = 3;
+        txObj["X"] = 4;
+        manager.Commit();
+
+        Assert.Equal(2, manager.Log.Count);
+        Assert.Equal(1, manager.Log[0].TransactionId);
+        Assert.Same(realObj, manager.Log[0].Target);
+        Assert.Equal("X", manager.Log[0].PropertyKey);
+        Assert.Equal(2, manager.Log[0].OldValue);
+        Assert.Equal(3, manager.Log[0].NewValue);
+        Assert.Equal(TransactionStatus.Success, manager.Log[0].Status);
+
+        manager.ClearLog();
+        Assert.Empty(manager.Log);
+    }
+
+    [Fact]
+    public void TransactionalUObject_CopyTo_InvalidBounds_Throw()
+    {
+        var realObj = new UObject { ["A"] = 1, ["B"] = 2 };
+        var manager = new TransactionManager();
+        var txObj = manager.CreateTransactionalObject(realObj);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            txObj.CopyTo(new KeyValuePair<string, object>[2], -1));
+        Assert.Throws<ArgumentException>(() =>
+            txObj.CopyTo(new KeyValuePair<string, object>[1], 0));
+    }
+
+    [Fact]
+    public void RegisterIoCDependencyTransaction_ResolvesSameManagerWithinScope_AndIsolatesDifferentScopes()
+    {
+        new RegisterIoCDependencyTransaction().Execute();
+
+        var scope1 = Ioc.Resolve<object>("IoC.Scope.Create");
+        var scope2 = Ioc.Resolve<object>("IoC.Scope.Create");
+
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope1).Execute();
+        var m1a = Ioc.Resolve<ITransactionManager>("Transactions.Manager");
+        var m1b = Ioc.Resolve<ITransactionManager>("Transactions.Manager");
+        Assert.Same(m1a, m1b);
+
+        var realShip = new UObject { ["Fuel"] = 10 };
+        var txShip = Ioc.Resolve<IUObject>("Objects.Transactional", realShip);
+        m1a.BeginTransaction();
+        txShip["Fuel"] = 5;
+        Assert.Equal(10, realShip["Fuel"]);
+
+        // Parallel thread in scope2 must have an isolated TransactionManager
+        ITransactionManager? m2FromThread = null;
+        var done = new ManualResetEvent(false);
+        var worker = new Thread(() =>
+        {
+            Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope2).Execute();
+            m2FromThread = Ioc.Resolve<ITransactionManager>("Transactions.Manager");
+            m2FromThread.BeginTransaction();
+            m2FromThread.Rollback();
+            done.Set();
+        });
+        worker.Start();
+        Assert.True(done.WaitOne(TimeSpan.FromSeconds(2)));
+        worker.Join();
+
+        Assert.NotNull(m2FromThread);
+        Assert.NotSame(m1a, m2FromThread);
+        Assert.True(m1a.IsActive);
+
+        m1a.Commit();
+        Assert.Equal(5, realShip["Fuel"]);
     }
 
     [Fact]

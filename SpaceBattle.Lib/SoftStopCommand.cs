@@ -13,10 +13,7 @@ public class SoftStopCommand : ICommand
 
     public void Execute()
     {
-        if (!_thread.Queue.IsAddingCompleted)
-        {
-            _thread.Queue.CompleteAdding();
-        }
+        _thread.Queue.CompleteAdding();
 
         _thread.SetStrategy(() =>
         {

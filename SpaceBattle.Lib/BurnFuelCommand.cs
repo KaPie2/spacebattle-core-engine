@@ -11,16 +11,7 @@ public class BurnFuelCommand : ICommand
 
     public void Execute()
     {
-        if (_fuelable.FuelConsumption < 0)
-        {
-            throw new InvalidOperationException("Fuel consumption cannot be negative");
-        }
-
-        if (_fuelable.FuelLevel < _fuelable.FuelConsumption)
-        {
-            throw new InvalidOperationException("Not enough fuel");
-        }
-
+        CheckFuelCommand.EnsureSufficientFuel(_fuelable);
         _fuelable.FuelLevel -= _fuelable.FuelConsumption;
     }
 }
