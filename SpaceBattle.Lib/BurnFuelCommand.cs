@@ -11,7 +11,11 @@ public class BurnFuelCommand : ICommand
 
     public void Execute()
     {
-        CheckFuelCommand.EnsureSufficientFuel(_fuelable);
+        if (_fuelable.FuelLevel < _fuelable.FuelConsumption)
+        {
+            throw new CommandException("Недостаточно топлива для выполнения маневра.");
+        }
+
         _fuelable.FuelLevel -= _fuelable.FuelConsumption;
     }
 }

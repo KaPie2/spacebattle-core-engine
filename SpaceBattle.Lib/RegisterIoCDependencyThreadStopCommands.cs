@@ -9,13 +9,13 @@ public class RegisterIoCDependencyThreadStopCommands : ICommand
         Ioc.Resolve<App.ICommand>(
             "IoC.Register",
             "Commands.HardStop",
-            (object[] args) => new HardStopCommand((IGameThread)args[0])
+            (object[] args) => new HardStopCommand((GameThread)args[0])
         ).Execute();
 
         Ioc.Resolve<App.ICommand>(
             "IoC.Register",
             "Commands.SoftStop",
-            (object[] args) => new SoftStopCommand((IGameThread)args[0])
+            (object[] args) => new SoftStopCommand((GameThread)args[0])
         ).Execute();
     }
 }

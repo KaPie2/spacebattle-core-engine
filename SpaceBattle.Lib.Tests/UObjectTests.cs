@@ -62,6 +62,7 @@ public class UObjectTests
         Assert.Equal(2, uobj.Count);
         Assert.False(uobj.IsReadOnly);
         Assert.True(uobj.ContainsKey("A"));
+        Assert.True(((ICollection<KeyValuePair<string, object>>)uobj).Contains(new KeyValuePair<string, object>("B", 2)));
         Assert.Contains(new KeyValuePair<string, object>("B", 2), uobj);
         Assert.Contains("A", uobj.Keys);
         Assert.Contains(1, uobj.Values);

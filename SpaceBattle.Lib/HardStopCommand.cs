@@ -2,9 +2,9 @@ namespace SpaceBattle.Lib;
 
 public class HardStopCommand : ICommand
 {
-    private readonly IGameThread _thread;
+    private readonly GameThread _thread;
 
-    public HardStopCommand(IGameThread thread)
+    public HardStopCommand(GameThread thread)
     {
         _thread = thread ?? throw new ArgumentNullException(nameof(thread));
     }

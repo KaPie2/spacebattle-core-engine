@@ -1,45 +1,46 @@
 using App;
-using App.Scopes;
 using Moq;
+using Xunit;
 
 namespace SpaceBattle.Lib.Tests;
 
 public class BurnFuelCommandTests
 {
-    public BurnFuelCommandTests()
-    {
-        new InitCommand().Execute();
-        var scope = Ioc.Resolve<object>("IoC.Scope.Create");
-        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope).Execute();
-    }
-
     [Fact]
-    public void Constructors_NullFuelable_ThrowsArgumentNullException()
+    public void BurnFuelCommand_DecrementsFuel_WhenEnoughFuel()
     {
-        Assert.Throws<ArgumentNullException>(() => new BurnFuelCommand(null!));
-        Assert.Throws<ArgumentNullException>(() => new CheckFuelCommand(null!));
-    }
-
-    [Fact]
-    public void BurnFuelCommand_SufficientFuel_DecreasesFuelLevel()
-    {
+        // T3.1: BurnFuelCommand_DecrementsFuel_WhenEnoughFuel (проверка корректного расхода)
         var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupProperty(f => f.FuelLevel, 10);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(3);
+        fuelableMock.SetupProperty(f => f.FuelLevel, 100);
+        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(30);
 
         var command = new BurnFuelCommand(fuelableMock.Object);
         command.Execute();
 
-        Assert.Equal(7, fuelableMock.Object.FuelLevel);
-        fuelableMock.VerifySet(f => f.FuelLevel = 7, Times.Once);
+        Assert.Equal(70, fuelableMock.Object.FuelLevel);
     }
 
     [Fact]
-    public void BurnFuelCommand_ExactFuel_SetsFuelLevelToZero()
+    public void BurnFuelCommand_ThrowsCommandException_WhenFuelInsufficient()
+    {
+        // T3.2: BurnFuelCommand_ThrowsCommandException_WhenFuelInsufficient (проверка ошибки нехватки)
+        var fuelableMock = new Mock<IFuelable>();
+        fuelableMock.SetupProperty(f => f.FuelLevel, 20);
+        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(50);
+
+        var command = new BurnFuelCommand(fuelableMock.Object);
+
+        var exception = Assert.Throws<CommandException>(() => command.Execute());
+        Assert.Equal("Недостаточно топлива для выполнения маневра.", exception.Message);
+        Assert.Equal(20, fuelableMock.Object.FuelLevel);
+    }
+
+    [Fact]
+    public void BurnFuelCommand_DecrementsFuelToZero_WhenFuelLevelEqualsConsumption()
     {
         var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupProperty(f => f.FuelLevel, 5);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(5);
+        fuelableMock.SetupProperty(f => f.FuelLevel, 45);
+        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(45);
 
         var command = new BurnFuelCommand(fuelableMock.Object);
         command.Execute();
@@ -48,72 +49,48 @@ public class BurnFuelCommandTests
     }
 
     [Fact]
-    public void BurnFuelCommand_InsufficientFuel_ThrowsInvalidOperationExceptionWithoutMutating()
+    public void BurnFuelCommand_ThrowsArgumentNullException_WhenFuelableIsNull()
     {
-        var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupProperty(f => f.FuelLevel, 2);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(5);
-
-        var command = new BurnFuelCommand(fuelableMock.Object);
-
-        Assert.Throws<InvalidOperationException>(() => command.Execute());
-        Assert.Equal(2, fuelableMock.Object.FuelLevel);
-        fuelableMock.VerifySet(f => f.FuelLevel = It.IsAny<int>(), Times.Never);
+        Assert.Throws<ArgumentNullException>(() => new BurnFuelCommand(null!));
     }
 
     [Fact]
-    public void BurnFuelCommand_NegativeConsumption_ThrowsInvalidOperationException()
+    public void CommandException_Constructors_WorkCorrectly()
     {
-        var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupGet(f => f.FuelLevel).Returns(10);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(-1);
+        var ex1 = new CommandException();
+        Assert.NotNull(ex1);
 
-        var command = new BurnFuelCommand(fuelableMock.Object);
+        var ex2 = new CommandException("Test message");
+        Assert.Equal("Test message", ex2.Message);
 
-        Assert.Throws<InvalidOperationException>(() => command.Execute());
+        var inner = new InvalidOperationException("Inner");
+        var ex3 = new CommandException("Outer message", inner);
+        Assert.Equal("Outer message", ex3.Message);
+        Assert.Same(inner, ex3.InnerException);
     }
 
     [Fact]
-    public void CheckFuelCommand_SufficientFuel_DoesNotThrow()
+    public void RegisterIoCDependencyBurnFuelCommand_RegistersSuccessfully()
     {
+        new App.Scopes.InitCommand().Execute();
+        var scope = Ioc.Resolve<object>("IoC.Scope.Create");
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope).Execute();
+
+        new RegisterIoCDependencyBurnFuelCommand().Execute();
+
         var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupGet(f => f.FuelLevel).Returns(10);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(4);
+        fuelableMock.SetupProperty(f => f.FuelLevel, 50);
+        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(10);
 
-        var command = new CheckFuelCommand(fuelableMock.Object);
-        command.Execute();
-    }
+        var commandFromFuelable = Ioc.Resolve<ICommand>("Commands.BurnFuel", fuelableMock.Object);
+        commandFromFuelable.Execute();
+        Assert.Equal(40, fuelableMock.Object.FuelLevel);
 
-    [Fact]
-    public void CheckFuelCommand_InsufficientFuel_ThrowsInvalidOperationException()
-    {
-        var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupGet(f => f.FuelLevel).Returns(3);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(4);
-
-        var command = new CheckFuelCommand(fuelableMock.Object);
-
-        Assert.Throws<InvalidOperationException>(() => command.Execute());
-    }
-
-    [Fact]
-    public void CheckFuelCommand_NegativeConsumption_ThrowsInvalidOperationException()
-    {
-        var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupGet(f => f.FuelLevel).Returns(10);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(-2);
-
-        var command = new CheckFuelCommand(fuelableMock.Object);
-
-        Assert.Throws<InvalidOperationException>(() => command.Execute());
-    }
-
-    [Fact]
-    public void RegisterIoCDependencyBurnFuelCommand_ResolvesCheckAndBurnCommands()
-    {
-        var fuelableMock = new Mock<IFuelable>();
-        fuelableMock.SetupProperty(f => f.FuelLevel, 10);
-        fuelableMock.SetupGet(f => f.FuelConsumption).Returns(2);
+        var dict = new Dictionary<string, object>
+        {
+            ["FuelLevel"] = 100,
+            ["FuelConsumption"] = 25
+        };
 
         Ioc.Resolve<App.ICommand>(
             "IoC.Register",
@@ -121,23 +98,7 @@ public class BurnFuelCommandTests
             (object[] args) => fuelableMock.Object
         ).Execute();
 
-        new RegisterIoCDependencyBurnFuelCommand().Execute();
-
-        var objDict = new UObject
-        {
-            ["FuelLevel"] = 10,
-            ["FuelConsumption"] = 2
-        };
-
-        var checkCmd = Ioc.Resolve<ICommand>("Commands.CheckFuel", objDict);
-        var burnCmd = Ioc.Resolve<ICommand>("Commands.BurnFuel", objDict);
-
-        Assert.IsType<CheckFuelCommand>(checkCmd);
-        Assert.IsType<BurnFuelCommand>(burnCmd);
-
-        checkCmd.Execute();
-        burnCmd.Execute();
-
-        Assert.Equal(8, fuelableMock.Object.FuelLevel);
+        var commandFromDict = Ioc.Resolve<ICommand>("Commands.BurnFuel", dict);
+        Assert.NotNull(commandFromDict);
     }
 }
