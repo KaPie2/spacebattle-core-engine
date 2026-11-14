@@ -198,4 +198,92 @@ public class GameThreadLoadTests
         var pos = (NVector)gameObject["Position"];
         Assert.Equal(new NVector(12, 15), pos);
     }
+
+    [Fact]
+    public async Task GameThreads_NPlusOneArchitecture_RouterDispatchesCommandsToNGamesWithoutDeadlocks()
+    {
+        // arrange (настройка архитектуры n+1: 1 общий поток-маршрутизатор и n игровых потоков)
+        int gameCount = 4;
+        int clientCount = 8;
+        int commandsPerClient = 50;
+        int totalCommands = clientCount * commandsPerClient;
+
+        // n игровых очередей и n игровых потоков
+        var gameThreads = new GameThread[gameCount];
+        var gameExecutedCounters = new int[gameCount];
+        for (int i = 0; i < gameCount; i++)
+        {
+            var gameQueue = new BlockingCollection<ICommand>();
+            gameThreads[i] = new GameThread(gameQueue);
+        }
+
+        // 1 общая входящая очередь сервера и 1 серверный поток-маршрутизатор (+1 поток)
+        var serverQueue = new BlockingCollection<ICommand>();
+        var serverThread = new GameThread(serverQueue);
+
+        var countdown = new CountdownEvent(totalCommands);
+
+        // запуск всех n+1 потоков
+        for (int i = 0; i < gameCount; i++)
+        {
+            gameThreads[i].Start();
+        }
+        serverThread.Start();
+
+        // act (параллельная отправка запросов от множества клиентов в единую очередь сервера)
+        var clientTasks = new Task[clientCount];
+        for (int c = 0; c < clientCount; c++)
+        {
+            int clientId = c;
+            clientTasks[c] = Task.Run(() =>
+            {
+                for (int i = 0; i < commandsPerClient; i++)
+                {
+                    // распределение команд клиентов по разным играм
+                    int targetGameId = (clientId + i) % gameCount;
+
+                    // целевая команда игры
+                    var targetGameCommand = new ActionCommand(() =>
+                    {
+                        Interlocked.Increment(ref gameExecutedCounters[targetGameId]);
+                        countdown.Signal();
+                    });
+
+                    // команда маршрутизации от клиента, поступающая в общую очередь сервера
+                    var routeCommand = new ActionCommand(() =>
+                    {
+                        var sendCmd = new SendCommand(targetGameCommand, gameThreads[targetGameId]);
+                        sendCmd.Execute();
+                    });
+
+                    serverQueue.Add(routeCommand);
+                }
+            });
+        }
+
+        await Task.WhenAll(clientTasks);
+
+        // assert (ожидание выполнения всех команд всеми игровыми потоками без взаимных блокировок)
+        bool completed = countdown.Wait(TimeSpan.FromSeconds(5));
+
+        // остановка всех n+1 потоков
+        serverThread.StopImmediately();
+        serverThread.Join();
+
+        for (int i = 0; i < gameCount; i++)
+        {
+            gameThreads[i].StopImmediately();
+            gameThreads[i].Join();
+        }
+
+        Assert.True(completed, "Не все команды были обработаны в архитектуре N+1 потоков.");
+
+        int totalExecuted = 0;
+        for (int i = 0; i < gameCount; i++)
+        {
+            totalExecuted += gameExecutedCounters[i];
+            Assert.True(gameExecutedCounters[i] > 0, $"Игровой поток {i} не получил ни одной команды.");
+        }
+        Assert.Equal(totalCommands, totalExecuted);
+    }
 }

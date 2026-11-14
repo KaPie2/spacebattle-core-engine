@@ -5,7 +5,7 @@ using App;
 
 namespace SpaceBattle.Lib
 {
-    public class GameThread
+    public class GameThread : ICommandReceiver
     {
         private readonly Thread _thread;
         private readonly BlockingCollection<ICommand> _queue;
@@ -21,6 +21,13 @@ namespace SpaceBattle.Lib
             _initialScope = initialScope;
             _strategy = DefaultExecutionLoop;
             _thread = new Thread(Run);
+        }
+
+        // прием команды в очередь потока через интерфейс icommandreceiver
+        public void Receive(ICommand command)
+        {
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            _queue.Add(command);
         }
 
         // запуск выполнения потока

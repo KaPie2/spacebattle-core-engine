@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using App;
 using App.Scopes;
+using Moq;
 using Xunit;
 using SpaceBattle.Lib;
 
@@ -141,6 +142,25 @@ public class GameThreadTests
         var queue = new BlockingCollection<ICommand>();
         var thread = new GameThread(queue);
         Assert.Throws<ArgumentNullException>(() => thread.SetStrategy(null!));
+    }
+
+    [Fact]
+    public void GameThread_ImplementsICommandReceiver_AndEnqueuesCommand()
+    {
+        // arrange (создание очереди и потока как получателя команд)
+        var queue = new BlockingCollection<ICommand>();
+        ICommandReceiver receiver = new GameThread(queue);
+        var mockCommand = new Mock<ICommand>();
+
+        // act (прием команды через интерфейс icommandreceiver)
+        receiver.Receive(mockCommand.Object);
+
+        // assert (проверка помещения команды в очередь)
+        Assert.Single(queue);
+        Assert.Same(mockCommand.Object, queue.Take());
+
+        // assert (проверка валидации на null)
+        Assert.Throws<ArgumentNullException>(() => receiver.Receive(null!));
     }
 }
 

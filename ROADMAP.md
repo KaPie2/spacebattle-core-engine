@@ -15,8 +15,9 @@
 - [x] Шаблонизатор адаптеров и фабрик `IAdapterFactory<T>` с вызовами `IoC.Resolve`.
 - [x] In-Memory компиляция сгенерированного кода через Roslyn (`CSharpCompilation`).
 - [x] Декларативная настройка стратегий вычислений через атрибут `[Adapter]`.
-- [x] Автоматическое внедрение зависимостей команд (`RegisterAutoInjectCommand`).
+- [x] Автоматическое внедрение зависимостей команд (`RegisterAutoInjectCommand`) через Expression Trees.
 - [x] Базовый цикл `GameThread` (Event Loop / Actor Pattern) с неблокирующей очередью `BlockingCollection<ICommand>`.
+- [x] Архитектура N+1 потоков (серверный маршрутизатор и N изолированных игровых потоков).
 - [x] Нагрузочное и стресс-тестирование очередей `GameThread` (Multiple Producers).
 - [x] Валидация отсутствия взаимных блокировок (Deadlocks) при смене стратегий на лету.
 - [x] Сквозной интеграционный тест связки адаптеров, IoC и потока (End-to-End).
