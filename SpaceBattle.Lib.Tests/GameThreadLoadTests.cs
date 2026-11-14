@@ -137,7 +137,7 @@ public class GameThreadLoadTests
         var thread = new GameThread(queue, currentScope);
 
         // регистрация стратегии скорости до адаптера
-        Ioc.Resolve<App.ICommand>("IoC.Register", "IMovingObject.Velocity.GetVelocityByAngle", (object[] args) =>
+        Ioc.Resolve<App.ICommand>("IoC.Register", "IMovingObject.Velocity.Get", (object[] args) =>
         {
             return new NVector(2, -5);
         }).Execute();

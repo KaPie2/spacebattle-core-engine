@@ -35,7 +35,7 @@ public class AdapterGeneratorTests
         // arrange (подготовка генератора кода)
         var generator = new AdapterCodeGenerator();
 
-        // act (генерация кода адаптера для imovingobject)
+        // act (генерация кода адаптера для чистого imovingobject)
         var generatedCode = generator.Generate(typeof(IMovingObject));
 
         // assert (проверка наличия объявлений классов адаптера и фабрики)
@@ -45,16 +45,28 @@ public class AdapterGeneratorTests
         // assert (проверка формирования вызовов ioc.resolve для свойств)
         Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
         Assert.Contains("set => Ioc.Resolve<App.ICommand>(\"IMovingObject.Position.Set\", _obj, value).Execute();", generatedCode);
+        Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Velocity.Get\", _obj);", generatedCode);
+    }
+
+    [Fact]
+    public void AdapterBuilder_GeneratesCustomStrategy_WhenAdapterAttributePresent()
+    {
+        // arrange (подготовка генератора кода)
+        var generator = new AdapterCodeGenerator();
+
+        // act (генерация кода адаптера для интерфейса с атрибутом adapter)
+        var generatedCode = generator.Generate(typeof(ICalculatedMovingObject));
 
         // assert (проверка формирования вызова стратегии по атрибуту adapter)
-        Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Velocity.GetVelocityByAngle\", _obj);", generatedCode);
+        Assert.Contains("public class CalculatedMovingObjectAdapter : SpaceBattle.Lib.Tests.ICalculatedMovingObject", generatedCode);
+        Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"ICalculatedMovingObject.Velocity.GetVelocityByAngle\", _obj);", generatedCode);
     }
 
     [Fact]
     public void Reflection_Reads_AdapterAttribute_Metadata()
     {
         // arrange (получение типа интерфейса через рефлексию)
-        Type targetType = typeof(IMovingObject);
+        Type targetType = typeof(ICalculatedMovingObject);
 
         // act (получение свойства velocity и атрибута adapter)
         var velocityProp = targetType.GetProperty("Velocity");
@@ -63,7 +75,7 @@ public class AdapterGeneratorTests
 
         // assert (проверка метаданных атрибута adapter)
         Assert.NotNull(attr);
-        Assert.Equal(typeof(IMovingObject), attr.TargetInterface);
+        Assert.Equal(typeof(ICalculatedMovingObject), attr.TargetInterface);
         Assert.Equal("Velocity", attr.PropertyName);
         Assert.Equal(typeof(MovementCalculations), attr.StrategyType);
         Assert.Equal("GetVelocityByAngle", attr.MethodName);
@@ -139,4 +151,11 @@ public class AdapterGeneratorTests
             Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", originalScope).Execute();
         }
     }
+}
+
+// интерфейс для тестирования кастомных стратегий с атрибутом adapter
+public interface ICalculatedMovingObject
+{
+    [Adapter(typeof(ICalculatedMovingObject), "Velocity", typeof(MovementCalculations), "GetVelocityByAngle")]
+    NVector Velocity { get; }
 }
