@@ -19,4 +19,10 @@
      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
    </ItemGroup>
 
+   <ItemGroup>
+     <None Update="AdapterTemplate.txt">
+       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+     </None>
+   </ItemGroup>
+
 </Project>

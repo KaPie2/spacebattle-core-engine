@@ -40,5 +40,14 @@ public class RegisterAdapterCommandTests
         // assert (проверка разрешения вычисляемого свойства через стратегию атрибута)
         var velocity = adapterPlural.Velocity;
         Assert.NotNull(velocity);
+
+        // assert (проверка разрешения исходного кода сгенерированного адаптера)
+        var sourcePlural = Ioc.Resolve<string>("Adapters.Source.IMovingObject");
+        Assert.NotNull(sourcePlural);
+        Assert.Contains("MovingObjectAdapter", sourcePlural);
+
+        var sourceSingular = Ioc.Resolve<string>("Adapter.Source.IMovingObject");
+        Assert.NotNull(sourceSingular);
+        Assert.Contains("MovingObjectAdapter", sourceSingular);
     }
 }

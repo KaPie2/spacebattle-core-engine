@@ -40,6 +40,10 @@ public class RegisterAdapterCommand<T> : ICommand
             return factory.Create(dict);
         }).Execute();
 
+        // регистрация сгенерированного исходного кода адаптера
+        Ioc.Resolve<App.ICommand>("IoC.Register", $"Adapters.Source.{interfaceType.Name}", (object[] args) => sourceCode).Execute();
+        Ioc.Resolve<App.ICommand>("IoC.Register", $"Adapter.Source.{interfaceType.Name}", (object[] args) => sourceCode).Execute();
+
         // регистрация стратегий вычислений из атрибутов адаптера
         foreach (var prop in interfaceType.GetProperties())
         {

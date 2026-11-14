@@ -1,13 +1,83 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using App;
 
 namespace SpaceBattle.Lib;
 
 public class AdapterCodeGenerator
 {
+    private readonly string? _template;
+
+    public const string DefaultTemplate = @"using System;
+using System.Collections.Generic;
+using App;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public class {{AdapterClassName}} : {{InterfaceName}}
+    {
+        private readonly IDictionary<string, object> _obj;
+
+        public {{AdapterClassName}}(IDictionary<string, object> obj)
+        {
+            _obj = obj ?? throw new ArgumentNullException(nameof(obj));
+        }
+
+{{Properties}}
+    }
+
+    public class {{FactoryClassName}} : IAdapterFactory<{{InterfaceName}}>
+    {
+        public {{InterfaceName}} Create(IDictionary<string, object> obj)
+        {
+            return new {{AdapterClassName}}(obj);
+        }
+    }
+}";
+
+    public AdapterCodeGenerator(string? template = null)
+    {
+        _template = template;
+    }
+
+    // получение актуального шаблона
+    private string GetTemplate()
+    {
+        if (!string.IsNullOrWhiteSpace(_template))
+            return _template;
+
+        // попытка разрешения шаблона через ioc
+        try
+        {
+            var iocTemplate = Ioc.Resolve<string>("Adapter.Template");
+            if (!string.IsNullOrWhiteSpace(iocTemplate))
+                return iocTemplate;
+        }
+        catch
+        {
+            // пропуск при отсутствии регистрации в ioc
+        }
+
+        // попытка чтения шаблона из txt-файла
+        var templateFile = Path.Combine(AppContext.BaseDirectory, "AdapterTemplate.txt");
+        if (File.Exists(templateFile))
+        {
+            return File.ReadAllText(templateFile);
+        }
+
+        if (File.Exists("AdapterTemplate.txt"))
+        {
+            return File.ReadAllText("AdapterTemplate.txt");
+        }
+
+        return DefaultTemplate;
+    }
+
     public string Generate(Type interfaceType)
     {
         // проверка типа интерфейса
@@ -20,26 +90,6 @@ public class AdapterCodeGenerator
         var adapterClassName = $"{cleanName}Adapter";
         var factoryClassName = $"{cleanName}AdapterFactory";
 
-        var sb = new StringBuilder();
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Collections.Generic;");
-        sb.AppendLine("using App;");
-        sb.AppendLine("using SpaceBattle.Lib;");
-        sb.AppendLine();
-        sb.AppendLine("namespace SpaceBattle.Lib.Generated");
-        sb.AppendLine("{");
-
-        // Класс Адаптера
-        sb.AppendLine($"    public class {adapterClassName} : {interfaceName}");
-        sb.AppendLine("    {");
-        sb.AppendLine("        private readonly IDictionary<string, object> _obj;");
-        sb.AppendLine();
-        sb.AppendLine($"        public {adapterClassName}(IDictionary<string, object> obj)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            _obj = obj ?? throw new ArgumentNullException(nameof(obj));");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-
         // получение уникальных свойств с учетом унаследованных интерфейсов
         var properties = new List<PropertyInfo>(interfaceType.GetProperties());
         foreach (var parentInterface in interfaceType.GetInterfaces())
@@ -49,46 +99,60 @@ public class AdapterCodeGenerator
         properties = properties.GroupBy(p => p.Name).Select(g => g.First()).ToList();
 
         // генерация свойств адаптера
+        var sbProps = new StringBuilder();
         foreach (var prop in properties)
         {
             var propTypeName = prop.PropertyType.FullName ?? prop.PropertyType.Name;
-            sb.AppendLine($"        public {propTypeName} {prop.Name}");
-            sb.AppendLine("        {");
+            sbProps.AppendLine($"        public {propTypeName} {prop.Name}");
+            sbProps.AppendLine("        {");
             if (prop.CanRead)
             {
                 var adapterAttr = prop.GetCustomAttribute<AdapterAttribute>();
                 if (adapterAttr != null)
                 {
                     // вызов стратегии вычисления, заданной атрибутом
-                    sb.AppendLine($"            get => Ioc.Resolve<{propTypeName}>(\"{adapterAttr.TargetInterface.Name}.{adapterAttr.PropertyName}.{adapterAttr.MethodName}\", _obj);");
+                    sbProps.AppendLine($"            get => Ioc.Resolve<{propTypeName}>(\"{adapterAttr.TargetInterface.Name}.{adapterAttr.PropertyName}.{adapterAttr.MethodName}\", _obj);");
                 }
                 else
                 {
                     // вызов стандартной стратегии получения значения
-                    sb.AppendLine($"            get => Ioc.Resolve<{propTypeName}>(\"{interfaceType.Name}.{prop.Name}.Get\", _obj);");
+                    sbProps.AppendLine($"            get => Ioc.Resolve<{propTypeName}>(\"{interfaceType.Name}.{prop.Name}.Get\", _obj);");
                 }
             }
             if (prop.CanWrite)
             {
                 // вызов команды установки значения
-                sb.AppendLine($"            set => Ioc.Resolve<App.ICommand>(\"{interfaceType.Name}.{prop.Name}.Set\", _obj, value).Execute();");
+                sbProps.AppendLine($"            set => Ioc.Resolve<App.ICommand>(\"{interfaceType.Name}.{prop.Name}.Set\", _obj, value).Execute();");
             }
-            sb.AppendLine("        }");
-            sb.AppendLine();
+            sbProps.AppendLine("        }");
+            sbProps.AppendLine();
         }
-        sb.AppendLine("    }");
-        sb.AppendLine();
 
-        // Класс Фабрики
-        sb.AppendLine($"    public class {factoryClassName} : IAdapterFactory<{interfaceName}>");
-        sb.AppendLine("    {");
-        sb.AppendLine($"        public {interfaceName} Create(IDictionary<string, object> obj)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            return new {adapterClassName}(obj);");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+        // подстановка переменных в шаблон
+        var template = GetTemplate();
+        var code = template
+            .Replace("{{AdapterClassName}}", adapterClassName)
+            .Replace("{{InterfaceName}}", interfaceName)
+            .Replace("{{FactoryClassName}}", factoryClassName)
+            .Replace("{{Properties}}", sbProps.ToString().TrimEnd());
 
-        return sb.ToString();
+        return code.TrimEnd() + Environment.NewLine;
+    }
+
+    // генерация и сохранение исходного кода адаптера в файл
+    public string GenerateToFile(Type interfaceType, string filePath)
+    {
+        // генерация c#-кода по шаблону
+        var code = Generate(interfaceType);
+
+        // запись сгенерированного текста в файл
+        var dir = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        File.WriteAllText(filePath, code);
+
+        return code;
     }
 }
