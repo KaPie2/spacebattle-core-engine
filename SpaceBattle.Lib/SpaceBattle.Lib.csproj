@@ -20,8 +20,8 @@
    </ItemGroup>
 
    <ItemGroup>
-     <None Update="CodeGeneration/AdapterTemplate.txt">
-       <TargetPath>AdapterTemplate.txt</TargetPath>
+     <None Update="CodeGeneration/*Template.txt">
+       <TargetPath>%(Filename)%(Extension)</TargetPath>
        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
      </None>
    </ItemGroup>
