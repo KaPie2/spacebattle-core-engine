@@ -10,6 +10,8 @@ public class AdapterAttribute : Attribute
     public Type StrategyType { get; }
     public string MethodName { get; }
 
+    internal string DependencyKey => $"{TargetInterface.Name}.{PropertyName}.{MethodName}";
+
     public AdapterAttribute(Type targetInterface, string propertyName, Type strategyType, string methodName)
     {
         TargetInterface = targetInterface;

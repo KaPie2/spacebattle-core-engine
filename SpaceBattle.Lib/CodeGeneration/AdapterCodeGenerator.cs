@@ -44,6 +44,12 @@ public class AdapterCodeGenerator
         return File.ReadAllText(templatePath);
     }
 
+    internal static string GetAdapterClassName(Type interfaceType)
+    {
+        var name = interfaceType.Name;
+        return name.StartsWith('I') ? $"{name[1..]}Adapter" : $"{name}Adapter";
+    }
+
     public string Generate(Type interfaceType)
     {
         // проверка типа интерфейса
@@ -51,10 +57,8 @@ public class AdapterCodeGenerator
             throw new ArgumentException("Целевой тип обязан быть интерфейсом.", nameof(interfaceType));
 
         var interfaceName = interfaceType.FullName ?? interfaceType.Name;
-        var cleanName = interfaceType.Name.StartsWith("I") ? interfaceType.Name.Substring(1) : interfaceType.Name;
-
-        var adapterClassName = $"{cleanName}Adapter";
-        var factoryClassName = $"{cleanName}AdapterFactory";
+        var adapterClassName = GetAdapterClassName(interfaceType);
+        var factoryClassName = $"{adapterClassName}Factory";
 
         // получение уникальных свойств с учетом унаследованных интерфейсов
         var properties = new List<PropertyInfo>(interfaceType.GetProperties());
@@ -75,9 +79,7 @@ public class AdapterCodeGenerator
             if (prop.CanRead)
             {
                 var adapterAttr = prop.GetCustomAttribute<AdapterAttribute>();
-                var key = adapterAttr == null
-                    ? $"{interfaceType.Name}.{prop.Name}.Get"
-                    : $"{adapterAttr.TargetInterface.Name}.{adapterAttr.PropertyName}.{adapterAttr.MethodName}";
+                var key = adapterAttr?.DependencyKey ?? $"{interfaceType.Name}.{prop.Name}.Get";
                 accessors.AppendLine(getterTemplate
                     .Replace("{{PropertyType}}", propTypeName)
                     .Replace("{{DependencyKey}}", key));
