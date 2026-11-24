@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using App;
 using App.Scopes;
@@ -24,7 +25,7 @@ public class GameThreadTests
     {
         // arrange (подготовка очереди и создание потока)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
 
         int commandCount = 10;
         var countdown = new CountdownEvent(commandCount);
@@ -46,37 +47,47 @@ public class GameThreadTests
     }
 
     [Fact]
-    public void GameThread_CatchBlock_DispatchesToExceptionHandler()
+    public void GameThread_ExecutesNextCommandAfterHandlingException()
     {
-        // arrange (подготовка очереди, потока и обработчика исключений)
-        var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
-
-        var exceptionHandledEvent = new ManualResetEvent(false);
-
-        Ioc.Resolve<App.ICommand>("IoC.Register", "Exception.Handler", (object[] args) =>
+        using var queue = new BlockingCollection<ICommand>();
+        using var lastCommandExecuted = new ManualResetEventSlim();
+        var executionOrder = new List<string>();
+        var error = new InvalidOperationException("Test exception");
+        var failingCommand = new ActionCommand(() =>
         {
-            return new ActionCommand(() => exceptionHandledEvent.Set());
-        }).Execute();
-
-        var currentScope = Ioc.Resolve<object>("IoC.Scope.Current");
-        queue.Add(new ActionCommand(() =>
+            executionOrder.Add("second");
+            throw error;
+        });
+        ICommand? handledCommand = null;
+        Exception? handledError = null;
+        var thread = new GameThread(queue, (command, exception) => new ActionCommand(() =>
         {
-            Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", currentScope).Execute();
+            handledCommand = command;
+            handledError = exception;
+            executionOrder.Add("handler");
+        }));
+        thread.Receive(new ActionCommand(() => executionOrder.Add("first")));
+        thread.Receive(failingCommand);
+        thread.Receive(new ActionCommand(() =>
+        {
+            executionOrder.Add("third");
+            lastCommandExecuted.Set();
         }));
 
-        queue.Add(new ActionCommand(() => throw new InvalidOperationException("Test exception")));
-
-        // act (запуск потока)
         thread.Start();
+        try
+        {
+            Assert.True(lastCommandExecuted.Wait(TimeSpan.FromSeconds(2)), "The third command did not execute.");
+        }
+        finally
+        {
+            thread.StopImmediately();
+            thread.Join();
+        }
 
-        // assert (ожидание срабатывания обработчика)
-        bool wasHandled = exceptionHandledEvent.WaitOne(TimeSpan.FromSeconds(2));
-
-        thread.StopImmediately();
-        thread.Join();
-
-        Assert.True(wasHandled, "Exception.Handler was not called after a command failure.");
+        Assert.Same(failingCommand, handledCommand);
+        Assert.Same(error, handledError);
+        Assert.Equal(new[] { "first", "second", "handler", "third" }, executionOrder);
     }
 
     [Fact]
@@ -85,7 +96,7 @@ public class GameThreadTests
         // arrange (подготовка области видимости, очереди и потока)
         var targetScope = Ioc.Resolve<object>("IoC.Scope.Create");
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue, targetScope);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand(), targetScope);
 
         object? resolvedScopeInThread = null;
         var scopeResolvedEvent = new ManualResetEvent(false);
@@ -113,7 +124,7 @@ public class GameThreadTests
     {
         // arrange (подготовка очереди и создание потока)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
 
         var customStrategyExecuted = new ManualResetEvent(false);
 
@@ -137,11 +148,19 @@ public class GameThreadTests
     public void GameThread_ThrowsArgumentNullException_OnNullQueueOrStrategy()
     {
         // arrange, act & assert (проверка валидации входных аргументов)
-        Assert.Throws<ArgumentNullException>(() => new GameThread(null!));
+        Assert.Throws<ArgumentNullException>(() => new GameThread(null!, (_, _) => new EmptyCommand()));
 
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
         Assert.Throws<ArgumentNullException>(() => thread.SetStrategy(null!));
+    }
+
+    [Fact]
+    public void GameThread_RequiresExceptionHandlerBeforeStart()
+    {
+        using var queue = new BlockingCollection<ICommand>();
+
+        Assert.Throws<ArgumentNullException>("exceptionHandler", () => new GameThread(queue, null!));
     }
 
     [Fact]
@@ -149,7 +168,7 @@ public class GameThreadTests
     {
         // arrange (создание очереди и потока как получателя команд)
         var queue = new BlockingCollection<ICommand>();
-        ICommandReceiver receiver = new GameThread(queue);
+        ICommandReceiver receiver = new GameThread(queue, (_, _) => new EmptyCommand());
         var mockCommand = new Mock<ICommand>();
 
         // act (прием команды через интерфейс icommandreceiver)

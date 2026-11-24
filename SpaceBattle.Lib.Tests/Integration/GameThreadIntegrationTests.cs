@@ -19,7 +19,6 @@ public class GameThreadIntegrationTests
         // arrange (регистрация стратегии скорости, адаптера и команды движения)
         var currentScope = Ioc.Resolve<object>("IoC.Scope.Current");
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue, currentScope);
 
         // регистрация стратегии скорости до адаптера
         Ioc.Resolve<App.ICommand>("IoC.Register", "IMovingObject.Velocity.Get", (object[] args) =>
@@ -62,6 +61,10 @@ public class GameThreadIntegrationTests
         }).Execute();
 
         // act (создание команды через ioc, постановка в очередь потока и запуск)
+        var thread = new GameThread(
+            queue,
+            (command, exception) => Ioc.Resolve<ICommand>("Exception.Handler", command, exception),
+            currentScope);
         var moveCmd = Ioc.Resolve<ICommand>("Commands.Move", gameObject);
 
         queue.Add(moveCmd);

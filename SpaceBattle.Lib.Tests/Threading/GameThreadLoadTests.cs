@@ -25,7 +25,7 @@ public class GameThreadLoadTests
     {
         // arrange (подготовка очереди, потока и счетчиков для параллельной нагрузки)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
 
         int producerCount = 8;
         int commandsPerProducer = 150;
@@ -69,7 +69,7 @@ public class GameThreadLoadTests
     {
         // arrange (подготовка очереди и создание потока)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
 
         var cancellationTokenSource = new CancellationTokenSource();
         var token = cancellationTokenSource.Token;
@@ -112,7 +112,7 @@ public class GameThreadLoadTests
     {
         // arrange (заполнение очереди большим объемом команд)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, (_, _) => new EmptyCommand());
 
         for (int i = 0; i < 1000; i++)
         {
@@ -143,12 +143,12 @@ public class GameThreadLoadTests
         for (int i = 0; i < gameCount; i++)
         {
             var gameQueue = new BlockingCollection<ICommand>();
-            gameThreads[i] = new GameThread(gameQueue);
+            gameThreads[i] = new GameThread(gameQueue, (_, _) => new EmptyCommand());
         }
 
         // 1 общая входящая очередь сервера и 1 серверный поток-маршрутизатор (+1 поток)
         var serverQueue = new BlockingCollection<ICommand>();
-        var serverThread = new GameThread(serverQueue);
+        var serverThread = new GameThread(serverQueue, (_, _) => new EmptyCommand());
 
         var countdown = new CountdownEvent(totalCommands);
 

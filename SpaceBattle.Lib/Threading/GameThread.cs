@@ -9,15 +9,20 @@ namespace SpaceBattle.Lib
     {
         private readonly Thread _thread;
         private readonly BlockingCollection<ICommand> _queue;
+        private readonly Func<ICommand, Exception, ICommand> _exceptionHandler;
         private readonly object? _initialScope;
         private volatile bool _stopRequested = false;
         private Action _strategy;
 
         public BlockingCollection<ICommand> Queue => _queue;
 
-        public GameThread(BlockingCollection<ICommand> queue, object? initialScope = null)
+        public GameThread(
+            BlockingCollection<ICommand> queue,
+            Func<ICommand, Exception, ICommand> exceptionHandler,
+            object? initialScope = null)
         {
             _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
             _initialScope = initialScope;
             _strategy = DefaultExecutionLoop;
             _thread = new Thread(Run);
@@ -71,8 +76,7 @@ namespace SpaceBattle.Lib
                 }
                 catch (Exception ex)
                 {
-                    // вызов маршрутизатора исключений
-                    Ioc.Resolve<ICommand>("Exception.Handler", cmd, ex).Execute();
+                    _exceptionHandler(cmd, ex).Execute();
                 }
             }
         }
