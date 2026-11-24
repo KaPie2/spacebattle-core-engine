@@ -1,0 +1,27 @@
+using System;
+using System.Collections.Generic;
+using App;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public class {{AdapterClassName}} : {{InterfaceName}}
+    {
+        private readonly IDictionary<string, object> _obj;
+
+        public {{AdapterClassName}}(IDictionary<string, object> obj)
+        {
+            _obj = obj ?? throw new ArgumentNullException(nameof(obj));
+        }
+
+{{Properties}}
+    }
+
+    public class {{FactoryClassName}} : IAdapterFactory<{{InterfaceName}}>
+    {
+        public {{InterfaceName}} Create(IDictionary<string, object> obj)
+        {
+            return new {{AdapterClassName}}(obj);
+        }
+    }
+}
