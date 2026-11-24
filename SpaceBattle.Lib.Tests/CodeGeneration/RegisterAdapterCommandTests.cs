@@ -33,6 +33,11 @@ public class RegisterAdapterCommandTests
         var adapterPlural = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", state);
         Assert.NotNull(adapterPlural);
         Assert.IsAssignableFrom<IMovingObject>(adapterPlural);
+        var registrationType = adapterPlural.GetType().Assembly.GetType(
+            "SpaceBattle.Lib.Generated.MovingObjectAdapterRegistrationCommand",
+            throwOnError: true
+        );
+        Assert.True(typeof(ICommand).IsAssignableFrom(registrationType));
 
         // assert (проверка разрешения по альтернативному ключу)
         var adapterSingular = Ioc.Resolve<IMovingObject>("Adapter.IMovingObject", state);
@@ -69,4 +74,51 @@ public class RegisterAdapterCommandTests
         var velocity = adapter.Velocity;
         Assert.NotNull(velocity);
     }
+
+    [Fact]
+    public void RegisterAdapterCommand_RegistersInheritedAttributeStrategy()
+    {
+        new RegisterAdapterCommand<IInheritedCalculatedMovingObject>().Execute();
+
+        var adapter = Ioc.Resolve<IInheritedCalculatedMovingObject>(
+            "Adapters.IInheritedCalculatedMovingObject",
+            new Dictionary<string, object>()
+        );
+
+        Assert.NotNull(adapter.Velocity);
+    }
+
+    [Fact]
+    public void RegisterAdapterCommand_AcceptsCustomTemplateWithInlineFactory()
+    {
+        const string adapterTemplate = """
+            using System.Collections.Generic;
+            using App;
+            using SpaceBattle.Lib;
+
+            namespace SpaceBattle.Lib.Generated;
+
+            public class {{AdapterClassName}} : {{InterfaceName}}
+            {
+                private readonly IDictionary<string, object> _obj;
+
+                public {{AdapterClassName}}(IDictionary<string, object> obj) => _obj = obj;
+
+            {{Properties}}
+            }
+
+            public class {{FactoryClassName}} : IAdapterFactory<{{InterfaceName}}>
+            {
+                public {{InterfaceName}} Create(IDictionary<string, object> obj) => new {{AdapterClassName}}(obj);
+            }
+            """;
+        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapter.Template", (object[] _) => adapterTemplate).Execute();
+
+        new RegisterAdapterCommand<IMovingObject>().Execute();
+
+        var adapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", new Dictionary<string, object>());
+        Assert.IsAssignableFrom<IMovingObject>(adapter);
+    }
 }
+
+public interface IInheritedCalculatedMovingObject : ICalculatedMovingObject { }

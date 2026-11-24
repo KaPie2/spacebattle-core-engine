@@ -8,8 +8,12 @@ public class AdapterCompiler
 {
     public Type Compile(string sourceCode, string className)
     {
-        // парсинг синтаксического дерева c#
-        var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode);
+        return Compile(new[] { sourceCode }, className);
+    }
+
+    internal Type Compile(IEnumerable<string> sources, string className)
+    {
+        var syntaxTrees = sources.Select(source => CSharpSyntaxTree.ParseText(source));
 
         // сбор ссылок на загруженные сборки
         var references = AppDomain.CurrentDomain.GetAssemblies()
@@ -20,7 +24,7 @@ public class AdapterCompiler
         // настройка параметров компиляции сборки
         var compilation = CSharpCompilation.Create(
             $"DynamicAdapter_{Guid.NewGuid()}",
-            new[] { syntaxTree },
+            syntaxTrees,
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
 

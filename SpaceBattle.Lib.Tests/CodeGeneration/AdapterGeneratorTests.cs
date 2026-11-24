@@ -46,6 +46,7 @@ public class AdapterGeneratorTests
         Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Position.Get\", _obj);", generatedCode);
         Assert.Contains("set => Ioc.Resolve<App.ICommand>(\"IMovingObject.Position.Set\", _obj, value).Execute();", generatedCode);
         Assert.Contains("get => Ioc.Resolve<SpaceBattle.Lib.NVector>(\"IMovingObject.Velocity.Get\", _obj);", generatedCode);
+        Assert.DoesNotContain("IMovingObject.Velocity.Set", generatedCode);
     }
 
     [Fact]

@@ -39,15 +39,52 @@ public class AdapterCodeGenerator
 
     private static string ReadTemplate(string fileName)
     {
-        var outputPath = Path.Combine(AppContext.BaseDirectory, fileName);
-        var templatePath = File.Exists(outputPath) ? outputPath : Path.GetFullPath(fileName);
+        var relativePath = Path.Combine("Templates", fileName);
+        var outputPath = Path.Combine(AppContext.BaseDirectory, relativePath);
+        var templatePath = File.Exists(outputPath) ? outputPath : Path.GetFullPath(relativePath);
         return File.ReadAllText(templatePath);
     }
 
-    internal static string GetAdapterClassName(Type interfaceType)
+    private static (string Property, string Getter, string Setter) ReadPropertyTemplates()
+    {
+        const string getterMarker = "{{GetterTemplate}}";
+        const string setterMarker = "{{SetterTemplate}}";
+        var template = ReadTemplate("AdapterPropertyTemplate.txt");
+        var getterStart = template.IndexOf(getterMarker, StringComparison.Ordinal);
+        var setterStart = template.IndexOf(setterMarker, StringComparison.Ordinal);
+        if (getterStart < 0 || setterStart < getterStart + getterMarker.Length)
+            throw new InvalidDataException("В AdapterPropertyTemplate.txt должны быть секции GetterTemplate и SetterTemplate в указанном порядке.");
+
+        return (
+            template[..getterStart].TrimEnd(),
+            template[(getterStart + getterMarker.Length)..setterStart].Trim('\r', '\n'),
+            template[(setterStart + setterMarker.Length)..].Trim('\r', '\n')
+        );
+    }
+
+    private static string GetAdapterClassName(Type interfaceType)
     {
         var name = interfaceType.Name;
         return name.StartsWith('I') ? $"{name[1..]}Adapter" : $"{name}Adapter";
+    }
+
+    internal static string GetRegistrationClassName(Type interfaceType) =>
+        $"{GetAdapterClassName(interfaceType)}RegistrationCommand";
+
+    internal static string GenerateRegistration(Type interfaceType)
+    {
+        return ReadTemplate("AdapterRegistrationTemplate.txt")
+            .Replace("{{RegistrationClassName}}", GetRegistrationClassName(interfaceType))
+            .Replace("{{FactoryClassName}}", $"{GetAdapterClassName(interfaceType)}Factory")
+            .Replace("{{InterfaceName}}", interfaceType.FullName ?? interfaceType.Name)
+            .Replace("{{InterfaceShortName}}", interfaceType.Name);
+    }
+
+    internal static IEnumerable<PropertyInfo> GetAdapterProperties(Type interfaceType)
+    {
+        return interfaceType.GetProperties()
+            .Concat(interfaceType.GetInterfaces().SelectMany(parent => parent.GetProperties()))
+            .DistinctBy(property => property.Name);
     }
 
     public string Generate(Type interfaceType)
@@ -60,19 +97,9 @@ public class AdapterCodeGenerator
         var adapterClassName = GetAdapterClassName(interfaceType);
         var factoryClassName = $"{adapterClassName}Factory";
 
-        // получение уникальных свойств с учетом унаследованных интерфейсов
-        var properties = new List<PropertyInfo>(interfaceType.GetProperties());
-        foreach (var parentInterface in interfaceType.GetInterfaces())
-        {
-            properties.AddRange(parentInterface.GetProperties());
-        }
-        properties = properties.GroupBy(p => p.Name).Select(g => g.First()).ToList();
-
-        var propertyTemplate = ReadTemplate("AdapterPropertyTemplate.txt").TrimEnd();
-        var getterTemplate = ReadTemplate("AdapterGetterTemplate.txt").TrimEnd();
-        var setterTemplate = ReadTemplate("AdapterSetterTemplate.txt").TrimEnd();
+        var (propertyTemplate, getterTemplate, setterTemplate) = ReadPropertyTemplates();
         var generatedProperties = new StringBuilder();
-        foreach (var prop in properties)
+        foreach (var prop in GetAdapterProperties(interfaceType))
         {
             var propTypeName = prop.PropertyType.FullName ?? prop.PropertyType.Name;
             var accessors = new StringBuilder();
@@ -96,8 +123,11 @@ public class AdapterCodeGenerator
             generatedProperties.AppendLine();
         }
 
-        // подстановка переменных в шаблон
-        var code = GetAdapterTemplate()
+        var adapterTemplate = GetAdapterTemplate();
+        if (adapterTemplate.Contains("{{Factory}}", StringComparison.Ordinal))
+            adapterTemplate = adapterTemplate.Replace("{{Factory}}", ReadTemplate("AdapterFactoryTemplate.txt").TrimEnd());
+
+        var code = adapterTemplate
             .Replace("{{AdapterClassName}}", adapterClassName)
             .Replace("{{InterfaceName}}", interfaceName)
             .Replace("{{FactoryClassName}}", factoryClassName)

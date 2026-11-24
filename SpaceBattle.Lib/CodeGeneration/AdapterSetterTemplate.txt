@@ -1,1 +1,0 @@
-            set => Ioc.Resolve<App.ICommand>("{{DependencyKey}}", _obj, value).Execute();

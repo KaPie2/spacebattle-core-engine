@@ -1,1 +1,0 @@
-            get => Ioc.Resolve<{{PropertyType}}>("{{DependencyKey}}", _obj);
