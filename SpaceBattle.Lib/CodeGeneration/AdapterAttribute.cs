@@ -20,11 +20,3 @@ public class AdapterAttribute : Attribute
         MethodName = methodName;
     }
 }
-
-public static class MovementCalculations
-{
-    public static NVector GetVelocityByAngle(object[] args)
-    {
-        return new NVector(); // заглушка для компиляции
-    }
-}

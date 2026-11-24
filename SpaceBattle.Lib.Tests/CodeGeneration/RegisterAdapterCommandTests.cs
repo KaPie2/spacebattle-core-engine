@@ -59,6 +59,29 @@ public class RegisterAdapterCommandTests
     }
 
     [Fact]
+    public void RegisterAdapterCommand_AdapterReadsAndWritesPositionInSourceDictionary()
+    {
+        var initialPosition = new NVector(1, 2);
+        var updatedPosition = new NVector(5, 7);
+        var state = new Dictionary<string, object> { ["Position"] = initialPosition };
+
+        Ioc.Resolve<App.ICommand>("IoC.Register", "IMovingObject.Position.Get",
+            (object[] args) => ((IDictionary<string, object>)args[0])["Position"]).Execute();
+        Ioc.Resolve<App.ICommand>("IoC.Register", "IMovingObject.Position.Set",
+            (object[] args) => new SetPositionCommand((IDictionary<string, object>)args[0], (NVector)args[1])).Execute();
+
+        new RegisterAdapterCommand<IMovingObject>().Execute();
+        var adapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", state);
+
+        Assert.Equal(initialPosition, adapter.Position);
+
+        adapter.Position = updatedPosition;
+
+        Assert.Equal(updatedPosition, (NVector)state["Position"]);
+        Assert.Equal(updatedPosition, adapter.Position);
+    }
+
+    [Fact]
     public void RegisterAdapterCommand_RegistersCustomStrategy_FromAdapterAttribute()
     {
         // arrange (подготовка команды регистрации для интерфейса с кастомным атрибутом)
@@ -71,8 +94,7 @@ public class RegisterAdapterCommandTests
         // assert (проверка автоматической регистрации стратегии из атрибута)
         var adapter = Ioc.Resolve<ICalculatedMovingObject>("Adapters.ICalculatedMovingObject", state);
         Assert.NotNull(adapter);
-        var velocity = adapter.Velocity;
-        Assert.NotNull(velocity);
+        Assert.Equal(new NVector(2, -5), adapter.Velocity);
     }
 
     [Fact]
@@ -85,7 +107,7 @@ public class RegisterAdapterCommandTests
             new Dictionary<string, object>()
         );
 
-        Assert.NotNull(adapter.Velocity);
+        Assert.Equal(new NVector(2, -5), adapter.Velocity);
     }
 
     [Fact]
@@ -118,6 +140,11 @@ public class RegisterAdapterCommandTests
 
         var adapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", new Dictionary<string, object>());
         Assert.IsAssignableFrom<IMovingObject>(adapter);
+    }
+
+    private sealed class SetPositionCommand(IDictionary<string, object> state, NVector position) : App.ICommand
+    {
+        public void Execute() => state["Position"] = position;
     }
 }
 

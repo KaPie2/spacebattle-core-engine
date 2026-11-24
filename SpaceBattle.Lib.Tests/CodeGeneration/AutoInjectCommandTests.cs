@@ -14,7 +14,7 @@ public class AutoInjectCommandTests
         // инициализация скоупов и установка тестового контекста
         new InitCommand().Execute();
         var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
-        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", testScope).Execute();
+        SetScope(testScope);
     }
 
     [Fact]
@@ -67,6 +67,52 @@ public class AutoInjectCommandTests
     }
 
     [Fact]
+    public void RegisterAutoInjectCommand_ResolvesAdapterInCurrentChildScope()
+    {
+        const string commandKey = "Game.Command.ScopedAdapter";
+        var state = new Dictionary<string, object>();
+        var parentScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        var firstScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        var secondScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        var firstAdapter = new TestAdapter();
+        var secondAdapter = new TestAdapter();
+        new RegisterAutoInjectCommand(commandKey, typeof(TestCommand<IScopedAdapter>)).Execute();
+
+        try
+        {
+            SetScope(firstScope);
+            RegisterAdapter($"Adapter.{nameof(IScopedAdapter)}", firstAdapter);
+            Assert.Same(firstAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+
+            SetScope(secondScope);
+            RegisterAdapter($"Adapters.{nameof(IScopedAdapter)}", secondAdapter);
+            Assert.Same(secondAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+
+            SetScope(firstScope);
+            Assert.Same(firstAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+        }
+        finally
+        {
+            SetScope(parentScope);
+        }
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_RetriesAfterMissingAdapterIsRegistered()
+    {
+        const string commandKey = "Game.Command.RetryAdapter";
+        var state = new Dictionary<string, object>();
+        new RegisterAutoInjectCommand(commandKey, typeof(TestCommand<IRetryAdapter>)).Execute();
+
+        Assert.ThrowsAny<Exception>(() => Ioc.Resolve<ICommand>(commandKey, state));
+
+        var adapter = new TestAdapter();
+        RegisterAdapter($"Adapter.{nameof(IRetryAdapter)}", adapter);
+
+        Assert.Same(adapter, Ioc.Resolve<TestCommand<IRetryAdapter>>(commandKey, state).Adapter);
+    }
+
+    [Fact]
     public void RegisterAutoInjectCommand_InjectsNonInterfaceParameter_WhenFallbackUsed()
     {
         // arrange (подготовка словаря состояния и регистрация неинтерфейсной зависимости)
@@ -108,6 +154,34 @@ public class AutoInjectCommandTests
 
         // act & assert (проверка выброса исключения при отсутствии публичных конструкторов)
         Assert.Throws<InvalidOperationException>(() => registerCommand.Execute());
+    }
+
+    private static void SetScope(object scope)
+    {
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope).Execute();
+    }
+
+    private static void RegisterAdapter(string key, object adapter)
+    {
+        Ioc.Resolve<App.ICommand>("IoC.Register", key, (object[] _) => adapter).Execute();
+    }
+
+    private interface IScopedAdapter { }
+
+    private interface IRetryAdapter { }
+
+    private sealed class TestAdapter : IScopedAdapter, IRetryAdapter { }
+
+    private sealed class TestCommand<TAdapter> : ICommand
+    {
+        public TAdapter Adapter { get; }
+
+        public TestCommand(TAdapter adapter)
+        {
+            Adapter = adapter;
+        }
+
+        public void Execute() { }
     }
 }
 

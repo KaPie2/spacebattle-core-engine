@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using App;
 
 namespace SpaceBattle.Lib;
@@ -52,24 +53,28 @@ internal static class AutoInjectedCommandFactory
 
         var singularKey = $"Adapter.{parameterName}";
         var pluralKey = $"Adapters.{parameterName}";
-        string? resolvedKey = null;
+        var keysByScope = new ConditionalWeakTable<object, string>();
 
         return state =>
         {
-            if (resolvedKey != null)
+            var scope = Ioc.Resolve<object>("IoC.Scope.Current");
+            if (keysByScope.TryGetValue(scope, out var resolvedKey))
                 return Ioc.Resolve<object>(resolvedKey, state);
 
+            var key = singularKey;
+            object adapter;
             try
             {
-                var adapter = Ioc.Resolve<object>(singularKey, state);
-                resolvedKey = singularKey;
-                return adapter;
+                adapter = Ioc.Resolve<object>(key, state);
             }
             catch
             {
-                resolvedKey = pluralKey;
-                return Ioc.Resolve<object>(pluralKey, state);
+                key = pluralKey;
+                adapter = Ioc.Resolve<object>(key, state);
             }
+
+            keysByScope.TryAdd(scope, key);
+            return adapter;
         };
     }
 }

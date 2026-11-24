@@ -157,6 +157,11 @@ public class AdapterGeneratorTests
 // интерфейс для тестирования кастомных стратегий с атрибутом adapter
 public interface ICalculatedMovingObject
 {
-    [Adapter(typeof(ICalculatedMovingObject), "Velocity", typeof(MovementCalculations), "GetVelocityByAngle")]
+    [Adapter(typeof(ICalculatedMovingObject), nameof(Velocity), typeof(MovementCalculations), nameof(MovementCalculations.GetVelocityByAngle))]
     NVector Velocity { get; }
+}
+
+internal static class MovementCalculations
+{
+    public static NVector GetVelocityByAngle(object[] _) => new(2, -5);
 }
