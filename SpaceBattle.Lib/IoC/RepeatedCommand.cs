@@ -35,7 +35,7 @@ public class RepeatOnceCommand : ICommand
 
     public void Execute()
     {
-        var wrappedCommand = new RepeatedCommand(_targetCommand);
+        var wrappedCommand = Ioc.Resolve<ICommand>("Commands.Repeated", _targetCommand);
         Ioc.Resolve<ICommand>("Commands.Send", wrappedCommand, _receiver).Execute();
     }
 }

@@ -82,6 +82,11 @@ public class RegisterIoCDependencyExceptionHandlerTests : IDisposable
         var registerDependencyCmd = new RegisterIoCDependencyExceptionHandler();
         registerDependencyCmd.Execute();
 
+        var repeatedCommand = new Mock<ICommand>().Object;
+        var repeated = Ioc.Resolve<ICommand>("Commands.Repeated", repeatedCommand);
+        Assert.IsType<RepeatedCommand>(repeated);
+        Assert.Same(repeatedCommand, ((RepeatedCommand)repeated).InnerCommand);
+
         var failedCommand = new TestGameCommand();
         var exception = new InvalidOperationException("Boom");
 

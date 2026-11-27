@@ -11,6 +11,16 @@ public class RegisterIoCDependencyExceptionHandler : ICommand
 
         Ioc.Resolve<App.ICommand>(
             "IoC.Register",
+            "Commands.Repeated",
+            (Func<object[], object>)(args =>
+            {
+                var command = (ICommand)args[0];
+                return new RepeatedCommand(command);
+            })
+        ).Execute();
+
+        Ioc.Resolve<App.ICommand>(
+            "IoC.Register",
             "Exception.Handler",
             (Func<object[], object>)(args =>
             {

@@ -15,6 +15,8 @@ public class RepeatOnceCommandTests : IDisposable
 
         var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
         Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", testScope).Execute();
+
+        new RegisterIoCDependencyExceptionHandler().Execute();
     }
 
     public void Dispose()

@@ -143,6 +143,30 @@ namespace SpaceBattle.Lib.Tests
         }
 
         [Fact]
+        public void Execute_WhenScopeSetCommandImplementsAppICommand_ExecutesDirectly()
+        {
+            var tempScope = Ioc.Resolve<object>("IoC.Scope.Create");
+            var setTempCmd = Ioc.Resolve<object>("IoC.Scope.Current.Set", tempScope);
+            setTempCmd.GetType().GetMethod("Execute")?.Invoke(setTempCmd, null);
+
+            var executedAppCommand = false;
+            var appCommand = new Mock<App.ICommand>();
+            appCommand.Setup(command => command.Execute())
+                .Callback(() => executedAppCommand = true);
+
+            var registerCommand = Ioc.Resolve<object>(
+                "IoC.Register",
+                "IoC.Scope.Current.Set",
+                (Func<object[], object>)(_ => appCommand.Object));
+            registerCommand.GetType().GetMethod("Execute")?.Invoke(registerCommand, null);
+
+            var targetCommand = new Mock<ICommand>();
+            new InSeparateScopeCommand(tempScope, targetCommand.Object).Execute();
+
+            Assert.True(executedAppCommand);
+        }
+
+        [Fact]
         public void Execute_WhenScopeSetReturnsObjectWithoutExecuteMethod_ThrowsInvalidOperationException()
         {
             // Arrange

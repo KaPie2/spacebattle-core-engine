@@ -42,19 +42,14 @@ namespace SpaceBattle.Lib
             {
                 libCmd.Execute();
             }
+            else if (commandObj is App.ICommand appCmd)
+            {
+                appCmd.Execute();
+            }
             else
             {
-                // На случай вызова библиотечной команды из App.Scopes
-                var executeMethod = commandObj?.GetType().GetMethod("Execute");
-                if (executeMethod != null)
-                {
-                    executeMethod.Invoke(commandObj, null);
-                }
-                else
-                {
-                    throw new InvalidOperationException(
-                        $"Команда смены скоупа имеет неподдерживаемый тип: {commandObj?.GetType().FullName ?? "null"}");
-                }
+                throw new InvalidOperationException(
+                    $"Команда смены скоупа имеет неподдерживаемый тип: {commandObj?.GetType().FullName ?? "null"}");
             }
         }
     }
