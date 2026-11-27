@@ -23,7 +23,7 @@ public class AutoInjectCommandTests
         // arrange (подготовка словаря состояния и регистрация адаптера)
         var dict = new Dictionary<string, object>();
 
-        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapter.IMovingObject", (object[] args) =>
+        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.IMovingObject", (object[] args) =>
         {
             return new DummyMovingAdapter();
         }).Execute();
@@ -44,26 +44,27 @@ public class AutoInjectCommandTests
     }
 
     [Fact]
-    public void RegisterAutoInjectCommand_InjectsAdapter_UsingFallbackPluralKey()
+    public void RegisterAutoInjectCommand_UsesChildOverrideOfGeneratedAdapter()
     {
-        // arrange (подготовка словаря состояния и регистрация адаптера по альтернативному ключу)
-        var dict = new Dictionary<string, object>();
-
-        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.ITestFallback", (object[] args) =>
+        var parentScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        new RegisterAdapterCommand<IMovingObject>().Execute();
+        new RegisterAutoInjectCommand("Game.Command.Move", typeof(MoveCommand)).Execute();
+        var childScope = Ioc.Resolve<object>("IoC.Scope.Create", parentScope);
+        var failure = new InvalidOperationException("Child adapter factory failed");
+        try
         {
-            return new DummyTestFallbackAdapter();
-        }).Execute();
+            SetScope(childScope);
+            Func<object[], object> childFactory = _ => throw failure;
+            Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.IMovingObject", childFactory).Execute();
 
-        var registerCommand = new RegisterAutoInjectCommand("Game.Command.TestFallback", typeof(DummyFallbackCommand));
-        registerCommand.Execute();
-
-        // act (разрешение команды из ioc)
-        var cmd = Ioc.Resolve<ICommand>("Game.Command.TestFallback", dict);
-
-        // assert (проверка успешного разрешения через альтернативный ключ)
-        Assert.NotNull(cmd);
-        var dummy = Assert.IsType<DummyFallbackCommand>(cmd);
-        Assert.IsType<DummyTestFallbackAdapter>(dummy.Adapter);
+            var state = new Dictionary<string, object>();
+            var actual = Assert.Throws<InvalidOperationException>(() => Ioc.Resolve<ICommand>("Game.Command.Move", state));
+            Assert.Same(failure, actual);
+        }
+        finally
+        {
+            SetScope(parentScope);
+        }
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public class AutoInjectCommandTests
         try
         {
             SetScope(firstScope);
-            RegisterAdapter($"Adapter.{nameof(IScopedAdapter)}", firstAdapter);
+            RegisterAdapter($"Adapters.{nameof(IScopedAdapter)}", firstAdapter);
             Assert.Same(firstAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
 
             SetScope(secondScope);
@@ -107,13 +108,13 @@ public class AutoInjectCommandTests
         Assert.ThrowsAny<Exception>(() => Ioc.Resolve<ICommand>(commandKey, state));
 
         var adapter = new TestAdapter();
-        RegisterAdapter($"Adapter.{nameof(IRetryAdapter)}", adapter);
+        RegisterAdapter($"Adapters.{nameof(IRetryAdapter)}", adapter);
 
         Assert.Same(adapter, Ioc.Resolve<TestCommand<IRetryAdapter>>(commandKey, state).Adapter);
     }
 
     [Fact]
-    public void RegisterAutoInjectCommand_InjectsNonInterfaceParameter_WhenFallbackUsed()
+    public void RegisterAutoInjectCommand_ResolvesNonInterfaceParameterByTypeName()
     {
         // arrange (подготовка словаря состояния и регистрация неинтерфейсной зависимости)
         var dict = new Dictionary<string, object>();
@@ -219,21 +220,5 @@ public class DummyNonInterfaceCommand : ICommand
 public class DummyPrivateCtorCommand : ICommand
 {
     private DummyPrivateCtorCommand() { }
-    public void Execute() { }
-}
-
-public interface ITestFallback { }
-
-public class DummyTestFallbackAdapter : ITestFallback { }
-
-public class DummyFallbackCommand : ICommand
-{
-    public ITestFallback Adapter { get; }
-
-    public DummyFallbackCommand(ITestFallback adapter)
-    {
-        Adapter = adapter;
-    }
-
     public void Execute() { }
 }

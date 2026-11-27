@@ -26,9 +26,7 @@ namespace SpaceBattle.Lib.Generated
             Func<object[], object> getSource = _ => _sourceCode;
 
             Register("Adapters.{{InterfaceShortName}}", createAdapter);
-            Register("Adapter.{{InterfaceShortName}}", createAdapter);
             Register("Adapters.Source.{{InterfaceShortName}}", getSource);
-            Register("Adapter.Source.{{InterfaceShortName}}", getSource);
 
             foreach (var (key, strategy) in _attributeStrategies)
             {

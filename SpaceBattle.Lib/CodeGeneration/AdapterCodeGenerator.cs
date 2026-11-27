@@ -25,7 +25,7 @@ public class AdapterCodeGenerator
         // попытка разрешения шаблона через ioc
         try
         {
-            var iocTemplate = Ioc.Resolve<string>("Adapter.Template");
+            var iocTemplate = Ioc.Resolve<string>("Adapters.Template");
             if (!string.IsNullOrWhiteSpace(iocTemplate))
                 return iocTemplate;
         }

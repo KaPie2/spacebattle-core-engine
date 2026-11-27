@@ -30,32 +30,22 @@ public class RegisterAdapterCommandTests
         command.Execute();
 
         // assert (проверка разрешения по основному контракту)
-        var adapterPlural = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", state);
-        Assert.NotNull(adapterPlural);
-        Assert.IsAssignableFrom<IMovingObject>(adapterPlural);
-        var registrationType = adapterPlural.GetType().Assembly.GetType(
+        var adapter = Ioc.Resolve<IMovingObject>("Adapters.IMovingObject", state);
+        Assert.NotNull(adapter);
+        Assert.IsAssignableFrom<IMovingObject>(adapter);
+        var registrationType = adapter.GetType().Assembly.GetType(
             "SpaceBattle.Lib.Generated.MovingObjectAdapterRegistrationCommand",
             throwOnError: true
         );
         Assert.True(typeof(ICommand).IsAssignableFrom(registrationType));
 
-        // assert (проверка разрешения по альтернативному ключу)
-        var adapterSingular = Ioc.Resolve<IMovingObject>("Adapter.IMovingObject", state);
-        Assert.NotNull(adapterSingular);
-        Assert.IsAssignableFrom<IMovingObject>(adapterSingular);
-
         // assert (проверка разрешения свойства скорости)
-        var velocity = adapterPlural.Velocity;
+        var velocity = adapter.Velocity;
         Assert.Equal(new NVector(1, 2), velocity);
 
         // assert (проверка разрешения исходного кода сгенерированного адаптера)
-        var sourcePlural = Ioc.Resolve<string>("Adapters.Source.IMovingObject");
-        Assert.NotNull(sourcePlural);
-        Assert.Contains("MovingObjectAdapter", sourcePlural);
-
-        var sourceSingular = Ioc.Resolve<string>("Adapter.Source.IMovingObject");
-        Assert.NotNull(sourceSingular);
-        Assert.Contains("MovingObjectAdapter", sourceSingular);
+        var source = Ioc.Resolve<string>("Adapters.Source.IMovingObject");
+        Assert.Contains("MovingObjectAdapter", source);
     }
 
     [Fact]
@@ -134,7 +124,7 @@ public class RegisterAdapterCommandTests
                 public {{InterfaceName}} Create(IDictionary<string, object> obj) => new {{AdapterClassName}}(obj);
             }
             """;
-        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapter.Template", (object[] _) => adapterTemplate).Execute();
+        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.Template", (object[] _) => adapterTemplate).Execute();
 
         new RegisterAdapterCommand<IMovingObject>().Execute();
 

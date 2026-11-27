@@ -136,7 +136,7 @@ public class AdapterGeneratorTests
         try
         {
             var iocTemplate = "// IoC template: {{AdapterClassName}}\n{{Properties}}";
-            Ioc.Resolve<App.ICommand>("IoC.Register", "Adapter.Template", (object[] args) => iocTemplate).Execute();
+            Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.Template", (object[] args) => iocTemplate).Execute();
 
             var generator = new AdapterCodeGenerator();
 
