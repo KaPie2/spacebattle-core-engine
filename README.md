@@ -25,10 +25,13 @@
 
 | Папка в `SpaceBattle.Lib` | Содержимое |
 | --- | --- |
-| `Commands` | Контракты команд, команды движения и поворота, макрокоманды и их стратегии. |
-| `GameObjects` | Игровые объекты и контракты их свойств, например `IMovingObject` и `IRotatingObject`. |
+| `Commands` | Контракты команд, команды движения и поворота, макрокоманды, команды остановки потока (`HardStopCommand`, `SoftStopCommand`), сжигание топлива (`BurnFuelCommand`) и перемещение корабля (`MoveShipCommand`). |
+| `Events` | Доменные события Event Storming: `PositionChangedEvent`, `FuelBurnedEvent`. |
+| `GameObjects` | Игровые объекты и интерфейсы: агрегат `Ship`, снимок состояния `ShipSnapshot`, `IUObject`, `UObject`, `IMovingObject`, `IRotatingObject`, `IFuelable`. |
 | `Geometry` | Типы для геометрических расчётов, например `NVector` и `Angle`. |
 | `IoC` | Общие регистрации и инфраструктура IoC. |
-| `Threading` | Контракты получателей и отправка команд в очереди. |
+| `Scenario` | Сценарный агент для сквозного тестирования и демонстрации (`ShipScenarioAgent`, `MoveShipRequest`, `ScenarioResult`). |
+| `Threading` | Многопоточность: `GameThread` (реализация `ICommandReceiver`), контракты получателей и отправка команд в очереди. |
+| `Transactions` | Менеджер транзакций (`ITransactionManager`, `TransactionManager`) для атомарных и согласованных изменений. |
 
 Тесты в `SpaceBattle.Lib.Tests` сгруппированы по тем же разделам.

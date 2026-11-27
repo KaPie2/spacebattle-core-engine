@@ -169,6 +169,58 @@ public class ThreadStopCommandsTests
     }
 
     [Fact]
+    public void GameThread_Receive_AddsCommandToQueue()
+    {
+        var queue = new BlockingCollection<ICommand>();
+        var thread = new GameThread(queue);
+        var cmd = new Mock<ICommand>();
+
+        thread.Receive(cmd.Object);
+
+        Assert.Single(queue);
+        Assert.Same(cmd.Object, queue.Take());
+    }
+
+    [Fact]
+    public void GameThread_Receive_ThrowsArgumentNullException_WhenCommandIsNull()
+    {
+        var queue = new BlockingCollection<ICommand>();
+        var thread = new GameThread(queue);
+
+        Assert.Throws<ArgumentNullException>(() => thread.Receive(null!));
+    }
+
+    [Fact]
+    public void GameThread_ThrowsArgumentNullException_WhenExceptionHandlerIsNull()
+    {
+        var queue = new BlockingCollection<ICommand>();
+        Assert.Throws<ArgumentNullException>(() => new GameThread(queue, (Func<ICommand, Exception, ICommand>)null!));
+    }
+
+    [Fact]
+    public void GameThread_WithCustomExceptionHandler_ExecutesHandler()
+    {
+        var queue = new BlockingCollection<ICommand>();
+        var handlerCalled = false;
+        var handlerCmd = new Mock<ICommand>();
+        handlerCmd.Setup(c => c.Execute()).Callback(() => handlerCalled = true);
+
+        var thread = new GameThread(queue, (cmd, ex) => handlerCmd.Object);
+
+        var failingCmd = new Mock<ICommand>();
+        failingCmd.Setup(c => c.Execute()).Throws(new Exception("test"));
+
+        thread.Receive(failingCmd.Object);
+        thread.Start();
+
+        Thread.Sleep(80);
+        thread.StopImmediately();
+        thread.Join();
+
+        Assert.True(handlerCalled);
+    }
+
+    [Fact]
     public void RegisterIoCDependencyThreadStopCommands_RegistersSuccessfully()
     {
         new App.Scopes.InitCommand().Execute();
