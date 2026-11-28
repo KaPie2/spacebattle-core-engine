@@ -9,7 +9,7 @@ public class ExceptionHandlerRouter
 {
     private readonly ConcurrentDictionary<(Type CommandType, Type ExceptionType), Func<ICommand, Exception, ICommand>> _routes = new();
 
-   
+
     public void Register(Type commandType, Type exceptionType, Func<ICommand, Exception, ICommand> handlerFactory)
     {
         if (commandType == null)
@@ -25,7 +25,7 @@ public class ExceptionHandlerRouter
         _routes[(commandType, exceptionType)] = handlerFactory ?? throw new ArgumentNullException(nameof(handlerFactory));
     }
 
-    
+
     public ICommand Handle(ICommand command, Exception exception)
     {
         if (command == null)

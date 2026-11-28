@@ -48,11 +48,11 @@ namespace SpaceBattle.Lib.Tests
         [Fact]
         public void Execute_SwitchesToTargetScope_ExecutesCommand_AndRestoresPreviousScope()
         {
-    // Arrange: получаем исходный скоуп и создаем дочерний скоуп для конкретной игры
+            // Arrange: получаем исходный скоуп и создаем дочерний скоуп для конкретной игры
             var initialScope = Ioc.Resolve<object>("IoC.Scope.Current");
             var gameScope = Ioc.Resolve<object>("IoC.Scope.Create");
 
-    // Регистрируем зависимость, которая будет существовать только внутри gameScope
+            // Регистрируем зависимость, которая будет существовать только внутри gameScope
             var setScopeCmd = Ioc.Resolve<object>("IoC.Scope.Current.Set", gameScope);
             setScopeCmd.GetType().GetMethod("Execute")?.Invoke(setScopeCmd, null);
 
@@ -63,7 +63,7 @@ namespace SpaceBattle.Lib.Tests
             );
             registerCmd.GetType().GetMethod("Execute")?.Invoke(registerCmd, null);
 
-    // Возвращаем поток в initialScope
+            // Возвращаем поток в initialScope
             setScopeCmd = Ioc.Resolve<object>("IoC.Scope.Current.Set", initialScope);
             setScopeCmd.GetType().GetMethod("Execute")?.Invoke(setScopeCmd, null);
 
@@ -71,23 +71,23 @@ namespace SpaceBattle.Lib.Tests
             var targetCommandMock = new Mock<ICommand>();
             targetCommandMock.Setup(c => c.Execute()).Callback(() =>
             {
-        // В момент выполнения команды активен gameScope, поэтому значение успешно разрешается
+                // В момент выполнения команды активен gameScope, поэтому значение успешно разрешается
                 valueReadInsideCommand = Ioc.Resolve<int>("Game.SpecificValue");
             });
 
             var inSeparateScopeCmd = new InSeparateScopeCommand(gameScope, targetCommandMock.Object);
 
-    // Act
+            // Act
             inSeparateScopeCmd.Execute();
 
-    // Assert
+            // Assert
             Assert.Equal(999, valueReadInsideCommand);
             targetCommandMock.Verify(c => c.Execute(), Times.Once);
 
-    // Проверяем, что после завершения скоуп вернулся к initialScope
+            // Проверяем, что после завершения скоуп вернулся к initialScope
             Assert.Same(initialScope, Ioc.Resolve<object>("IoC.Scope.Current"));
 
-    // В initialScope зависимость отсутствует: при попытке подняться выше rootScope выбрасывается Exception
+            // В initialScope зависимость отсутствует: при попытке подняться выше rootScope выбрасывается Exception
             var ex = Assert.Throws<Exception>(() => Ioc.Resolve<int>("Game.SpecificValue"));
             Assert.Equal("The root scope has no a parent scope.", ex.Message);
         }
