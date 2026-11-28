@@ -30,4 +30,20 @@ public sealed class GameCommandRouter
             ? CommandRoutingResult.Accepted
             : CommandRoutingResult.QueueFull;
     }
+
+    /// <summary>Requests an in-process transfer between running game workers.</summary>
+    /// <returns>True after the destination owns the game. A refused transfer leaves the current owner in place.</returns>
+    public Task<bool> TryTransferAsync(string gameId, GameWorker destination)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+        ArgumentNullException.ThrowIfNull(destination);
+
+        if (!_routes.TryGetValue(gameId, out var inbox) || inbox is not GameWorker source ||
+            ReferenceEquals(source, destination))
+        {
+            return Task.FromResult(false);
+        }
+
+        return source.TryTransferAsync(gameId, destination, () => _routes.TryUpdate(gameId, destination, source));
+    }
 }
