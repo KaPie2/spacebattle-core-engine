@@ -15,4 +15,15 @@
     </Reference>
   </ItemGroup>
 
+   <ItemGroup>
+     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+   </ItemGroup>
+
+   <ItemGroup>
+     <None Update="CodeGeneration/Templates/*.txt">
+       <TargetPath>Templates/%(Filename)%(Extension)</TargetPath>
+       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+     </None>
+   </ItemGroup>
+
 </Project>

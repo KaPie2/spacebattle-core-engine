@@ -1,0 +1,10 @@
+        public {{PropertyType}} {{PropertyName}}
+        {
+{{Accessors}}
+        }
+
+{{GetterTemplate}}
+            get => Ioc.Resolve<{{PropertyType}}>("{{DependencyKey}}", _obj);
+
+{{SetterTemplate}}
+            set => Ioc.Resolve<App.ICommand>("{{DependencyKey}}", _obj, value).Execute();

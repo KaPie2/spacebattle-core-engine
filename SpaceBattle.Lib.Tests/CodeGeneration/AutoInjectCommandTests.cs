@@ -1,0 +1,224 @@
+using System;
+using System.Collections.Generic;
+using App;
+using App.Scopes;
+using Xunit;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Tests;
+
+public class AutoInjectCommandTests
+{
+    public AutoInjectCommandTests()
+    {
+        // инициализация скоупов и установка тестового контекста
+        new InitCommand().Execute();
+        var testScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        SetScope(testScope);
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_InjectsAdapter_Automatically()
+    {
+        // arrange (подготовка словаря состояния и регистрация адаптера)
+        var dict = new Dictionary<string, object>();
+
+        Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.IMovingObject", (object[] args) =>
+        {
+            return new DummyMovingAdapter();
+        }).Execute();
+
+        var registerCommand = new RegisterAutoInjectCommand("Game.Command.Move", typeof(DummyMoveCommand));
+        registerCommand.Execute();
+
+        // act (разрешение команды из ioc)
+        var moveCommand = Ioc.Resolve<ICommand>("Game.Command.Move", dict);
+
+        // assert (проверка типа созданной команды и внедренного адаптера)
+        Assert.NotNull(moveCommand);
+        Assert.IsType<DummyMoveCommand>(moveCommand);
+
+        var dummyMove = (DummyMoveCommand)moveCommand;
+        Assert.NotNull(dummyMove.MovingObject);
+        Assert.IsType<DummyMovingAdapter>(dummyMove.MovingObject);
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_UsesChildOverrideOfGeneratedAdapter()
+    {
+        var parentScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        new RegisterAdapterCommand<IMovingObject>().Execute();
+        new RegisterAutoInjectCommand("Game.Command.Move", typeof(MoveCommand)).Execute();
+        var childScope = Ioc.Resolve<object>("IoC.Scope.Create", parentScope);
+        var failure = new InvalidOperationException("Child adapter factory failed");
+        try
+        {
+            SetScope(childScope);
+            Func<object[], object> childFactory = _ => throw failure;
+            Ioc.Resolve<App.ICommand>("IoC.Register", "Adapters.IMovingObject", childFactory).Execute();
+
+            var state = new Dictionary<string, object>();
+            var actual = Assert.Throws<InvalidOperationException>(() => Ioc.Resolve<ICommand>("Game.Command.Move", state));
+            Assert.Same(failure, actual);
+        }
+        finally
+        {
+            SetScope(parentScope);
+        }
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_ResolvesAdapterInCurrentChildScope()
+    {
+        const string commandKey = "Game.Command.ScopedAdapter";
+        var state = new Dictionary<string, object>();
+        var parentScope = Ioc.Resolve<object>("IoC.Scope.Current");
+        var firstScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        var secondScope = Ioc.Resolve<object>("IoC.Scope.Create");
+        var firstAdapter = new TestAdapter();
+        var secondAdapter = new TestAdapter();
+        new RegisterAutoInjectCommand(commandKey, typeof(TestCommand<IScopedAdapter>)).Execute();
+
+        try
+        {
+            SetScope(firstScope);
+            RegisterAdapter($"Adapters.{nameof(IScopedAdapter)}", firstAdapter);
+            Assert.Same(firstAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+
+            SetScope(secondScope);
+            RegisterAdapter($"Adapters.{nameof(IScopedAdapter)}", secondAdapter);
+            Assert.Same(secondAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+
+            SetScope(firstScope);
+            Assert.Same(firstAdapter, Ioc.Resolve<TestCommand<IScopedAdapter>>(commandKey, state).Adapter);
+        }
+        finally
+        {
+            SetScope(parentScope);
+        }
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_RetriesAfterMissingAdapterIsRegistered()
+    {
+        const string commandKey = "Game.Command.RetryAdapter";
+        var state = new Dictionary<string, object>();
+        new RegisterAutoInjectCommand(commandKey, typeof(TestCommand<IRetryAdapter>)).Execute();
+
+        Assert.ThrowsAny<Exception>(() => Ioc.Resolve<ICommand>(commandKey, state));
+
+        var adapter = new TestAdapter();
+        RegisterAdapter($"Adapters.{nameof(IRetryAdapter)}", adapter);
+
+        Assert.Same(adapter, Ioc.Resolve<TestCommand<IRetryAdapter>>(commandKey, state).Adapter);
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_ResolvesNonInterfaceParameterByTypeName()
+    {
+        // arrange (подготовка словаря состояния и регистрация неинтерфейсной зависимости)
+        var dict = new Dictionary<string, object>();
+
+        Ioc.Resolve<App.ICommand>("IoC.Register", "Int32", (object[] args) =>
+        {
+            return (object)42;
+        }).Execute();
+
+        var registerCommand = new RegisterAutoInjectCommand("Game.Command.NonInterface", typeof(DummyNonInterfaceCommand));
+        registerCommand.Execute();
+
+        // act (разрешение команды из ioc)
+        var cmd = Ioc.Resolve<ICommand>("Game.Command.NonInterface", dict);
+
+        // assert (проверка успешного внедрения параметра)
+        Assert.NotNull(cmd);
+        var dummyCmd = Assert.IsType<DummyNonInterfaceCommand>(cmd);
+        Assert.Equal(42, dummyCmd.Value);
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_ThrowsArgumentException_OnEmptyArgs()
+    {
+        // arrange (подготовка команды с автоматическим внедрением)
+        var registerCommand = new RegisterAutoInjectCommand("Game.Command.NoArgs", typeof(DummyMoveCommand));
+        registerCommand.Execute();
+
+        // act & assert (проверка выброса исключения при пустом массиве аргументов)
+        Assert.Throws<ArgumentException>(() => Ioc.Resolve<ICommand>("Game.Command.NoArgs"));
+    }
+
+    [Fact]
+    public void RegisterAutoInjectCommand_ThrowsInvalidOperationException_WhenNoPublicConstructors()
+    {
+        // arrange (подготовка команды без публичных конструкторов)
+        var registerCommand = new RegisterAutoInjectCommand("Game.Command.PrivateCtor", typeof(DummyPrivateCtorCommand));
+
+        // act & assert (проверка выброса исключения при отсутствии публичных конструкторов)
+        Assert.Throws<InvalidOperationException>(() => registerCommand.Execute());
+    }
+
+    private static void SetScope(object scope)
+    {
+        Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", scope).Execute();
+    }
+
+    private static void RegisterAdapter(string key, object adapter)
+    {
+        Ioc.Resolve<App.ICommand>("IoC.Register", key, (object[] _) => adapter).Execute();
+    }
+
+    private interface IScopedAdapter { }
+
+    private interface IRetryAdapter { }
+
+    private sealed class TestAdapter : IScopedAdapter, IRetryAdapter { }
+
+    private sealed class TestCommand<TAdapter> : ICommand
+    {
+        public TAdapter Adapter { get; }
+
+        public TestCommand(TAdapter adapter)
+        {
+            Adapter = adapter;
+        }
+
+        public void Execute() { }
+    }
+}
+
+// вспомогательные классы для тестирования
+public class DummyMovingAdapter : IMovingObject
+{
+    public NVector Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    public NVector Velocity => throw new NotImplementedException();
+}
+
+public class DummyMoveCommand : ICommand
+{
+    public IMovingObject MovingObject { get; }
+
+    public DummyMoveCommand(IMovingObject movingObject)
+    {
+        MovingObject = movingObject;
+    }
+
+    public void Execute() { }
+}
+
+public class DummyNonInterfaceCommand : ICommand
+{
+    public int Value { get; }
+
+    public DummyNonInterfaceCommand(int value)
+    {
+        Value = value;
+    }
+
+    public void Execute() { }
+}
+
+public class DummyPrivateCtorCommand : ICommand
+{
+    private DummyPrivateCtorCommand() { }
+    public void Execute() { }
+}
