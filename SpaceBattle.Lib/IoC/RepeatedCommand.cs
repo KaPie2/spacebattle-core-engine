@@ -2,6 +2,7 @@ using System;
 using App;
 
 namespace SpaceBattle.Lib;
+
 public class RepeatedCommand : ICommand
 {
     private readonly ICommand _innerCommand;
