@@ -1,6 +1,6 @@
 # Space Battle: Game Engine Architecture
 
-[![CI Pipeline](https://github.com/KaPie2/OOAaD_4term/actions/workflows/ci.yml/badge.svg)](https://github.com/KaPie2/OOAaD_4term/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/KaPie2/spacebattle-core-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/KaPie2/spacebattle-core-engine/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/Coverage-%3E90%25-brightgreen.svg)]()
 
 
@@ -25,13 +25,13 @@
 
 | Папка в `SpaceBattle.Lib` | Содержимое |
 | --- | --- |
-| `Commands` | Контракты команд, команды движения и поворота, макрокоманды, команды остановки потока (`HardStopCommand`, `SoftStopCommand`), сжигание топлива (`BurnFuelCommand`) и перемещение корабля (`MoveShipCommand`). |
-| `Events` | Доменные события Event Storming: `PositionChangedEvent`, `FuelBurnedEvent`. |
-| `GameObjects` | Игровые объекты и интерфейсы: агрегат `Ship`, снимок состояния `ShipSnapshot`, `IUObject`, `UObject`, `IMovingObject`, `IRotatingObject`, `IFuelable`. |
+| `CodeGeneration` | Генерация адаптеров, автоинъекция команд и регистрация фабрик в IoC. TXT-шаблоны находятся в `CodeGeneration/Templates`. |
+| `Commands` | Контракты команд, команды движения и поворота, макрокоманды, команды остановки потока (`HardStopCommand`, `SoftStopCommand`) и сжигание топлива (`BurnFuelCommand`). |
+| `Collisions` | Проверка коллизий, пространственная сетка `SpatialGrid` и определение пересечений. |
+| `GameObjects` | Игровые объекты и интерфейсы: `IUObject`, `UObject`, `IMovingObject`, `IRotatingObject`, `IFuelable`. |
 | `Geometry` | Типы для геометрических расчётов, например `NVector` и `Angle`. |
 | `IoC` | Общие регистрации и инфраструктура IoC. |
-| `Scenario` | Сценарный агент для сквозного тестирования и демонстрации (`ShipScenarioAgent`, `MoveShipRequest`, `ScenarioResult`). |
-| `Threading` | Многопоточность: `GameThread` (реализация `ICommandReceiver`), контракты получателей и отправка команд в очереди. |
+| `Threading` | Игровые потоки, очереди и отправка команд. |
 | `Transactions` | Менеджер транзакций (`ITransactionManager`, `TransactionManager`) для атомарных и согласованных изменений. |
 
-Тесты в `SpaceBattle.Lib.Tests` сгруппированы по тем же разделам.
+Тесты в `SpaceBattle.Lib.Tests` сгруппированы по тем же разделам. Сквозные сценарии находятся в `SpaceBattle.Lib.Tests/Integration`.

@@ -1,85 +1,87 @@
+using System;
+using System.Threading;
 using System.Collections.Concurrent;
 using App;
 
-namespace SpaceBattle.Lib;
-
-public class GameThread : ICommandReceiver
+namespace SpaceBattle.Lib
 {
-    private readonly Thread _thread;
-    private readonly BlockingCollection<ICommand> _queue;
-    private readonly Func<ICommand, Exception, ICommand> _exceptionHandler;
-    private readonly object? _initialScope;
-    private volatile bool _stopRequested = false;
-    private Action _strategy;
-
-    public BlockingCollection<ICommand> Queue => _queue;
-
-    public GameThread(
-        BlockingCollection<ICommand> queue,
-        Func<ICommand, Exception, ICommand> exceptionHandler,
-        object? initialScope = null)
+    public class GameThread : ICommandReceiver
     {
-        _queue = queue ?? throw new ArgumentNullException(nameof(queue));
-        _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
-        _initialScope = initialScope;
-        _strategy = DefaultExecutionLoop;
-        _thread = new Thread(Run);
-    }
+        private readonly Thread _thread;
+        private readonly BlockingCollection<ICommand> _queue;
+        private readonly Func<ICommand, Exception, ICommand> _exceptionHandler;
+        private readonly object? _initialScope;
+        private volatile bool _stopRequested = false;
+        private Action _strategy;
 
-    public GameThread(BlockingCollection<ICommand> queue, object? initialScope = null)
-        : this(queue, (cmd, ex) => Ioc.Resolve<ICommand>("Exception.Handler", cmd, ex), initialScope)
-    {
-    }
+        public BlockingCollection<ICommand> Queue => _queue;
 
-    public void Receive(ICommand command)
-    {
-        if (command == null)
+        public GameThread(
+            BlockingCollection<ICommand> queue,
+            Func<ICommand, Exception, ICommand> exceptionHandler,
+            object? initialScope = null)
         {
-            throw new ArgumentNullException(nameof(command));
+            _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _exceptionHandler = exceptionHandler ?? throw new ArgumentNullException(nameof(exceptionHandler));
+            _initialScope = initialScope;
+            _strategy = DefaultExecutionLoop;
+            _thread = new Thread(Run);
         }
 
-        _queue.Add(command);
-    }
-
-    public void Start() => _thread.Start();
-
-    public void StopImmediately()
-    {
-        _stopRequested = true;
-    }
-
-    public void SetStrategy(Action newStrategy)
-    {
-        _strategy = newStrategy ?? throw new ArgumentNullException(nameof(newStrategy));
-    }
-
-    private void Run()
-    {
-        if (_initialScope != null)
+        // прием команды в очередь потока через интерфейс icommandreceiver
+        public void Receive(ICommand command)
         {
-            Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", _initialScope).Execute();
+            if (command == null) throw new ArgumentNullException(nameof(command));
+            _queue.Add(command);
         }
 
-        while (!_stopRequested)
-        {
-            _strategy();
-        }
-    }
+        // запуск выполнения потока
+        public void Start() => _thread.Start();
 
-    private void DefaultExecutionLoop()
-    {
-        if (_queue.TryTake(out var cmd, 50))
+        // немедленная остановка цикла
+        public void StopImmediately()
         {
-            try
+            _stopRequested = true;
+        }
+
+        // подмена текущей стратегии выполнения
+        public void SetStrategy(Action newStrategy)
+        {
+            _strategy = newStrategy ?? throw new ArgumentNullException(nameof(newStrategy));
+        }
+
+        // основной цикл обработки команд
+        private void Run()
+        {
+            if (_initialScope != null)
             {
-                cmd.Execute();
+                // установка начальной области видимости для потока
+                Ioc.Resolve<App.ICommand>("IoC.Scope.Current.Set", _initialScope).Execute();
             }
-            catch (Exception ex)
+
+            while (!_stopRequested)
             {
-                _exceptionHandler(cmd, ex).Execute();
+                _strategy();
             }
         }
-    }
 
-    public void Join() => _thread.Join();
+        // стандартная стратегия извлечения и выполнения команды из очереди
+        private void DefaultExecutionLoop()
+        {
+            if (_queue.TryTake(out var cmd, 50))
+            {
+                try
+                {
+                    cmd.Execute();
+                }
+                catch (Exception ex)
+                {
+                    _exceptionHandler(cmd, ex).Execute();
+                }
+            }
+        }
+
+        // ожидание завершения потока
+        public void Join() => _thread.Join();
+    }
 }

@@ -7,12 +7,14 @@ namespace SpaceBattle.Lib.Tests;
 
 public class ThreadStopCommandsTests
 {
+    private static Func<ICommand, Exception, ICommand> DefaultHandler => (_, _) => new EmptyCommand();
+
     [Fact]
     public void HardStopCommand_StopsThreadImmediately()
     {
         // T3.3: HardStopCommand_StopsThreadImmediately (проверка игнорирования оставшейся очереди)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
         var executedCount = 0;
 
         var slowCommand = new Mock<ICommand>();
@@ -43,7 +45,7 @@ public class ThreadStopCommandsTests
     {
         // T3.4: SoftStopCommand_DrainsAllQueueItems_BeforeThreadExits (проверка 100% доработки задач)
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
         var executedCount = 0;
 
         for (int i = 0; i < 10; i++)
@@ -68,7 +70,7 @@ public class ThreadStopCommandsTests
     public void SoftStopCommand_WhenQueueIsEmpty_StopsThreadImmediately()
     {
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
 
         thread.Start();
 
@@ -94,14 +96,14 @@ public class ThreadStopCommandsTests
     [Fact]
     public void GameThread_ThrowsArgumentNullException_WhenQueueIsNull()
     {
-        Assert.Throws<ArgumentNullException>(() => new GameThread(null!));
+        Assert.Throws<ArgumentNullException>(() => new GameThread(null!, DefaultHandler));
     }
 
     [Fact]
     public void GameThread_SetStrategy_ThrowsArgumentNullException_WhenStrategyIsNull()
     {
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
         Assert.Throws<ArgumentNullException>(() => thread.SetStrategy(null!));
     }
 
@@ -112,7 +114,7 @@ public class ThreadStopCommandsTests
         var scope = Ioc.Resolve<object>("IoC.Scope.Create");
 
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue, scope);
+        var thread = new GameThread(queue, DefaultHandler, scope);
 
         var executed = false;
         var cmd = new Mock<ICommand>();
@@ -144,14 +146,8 @@ public class ThreadStopCommandsTests
         var handlerCommand = new Mock<ICommand>();
         handlerCommand.Setup(h => h.Execute()).Callback(() => handlerExecuted = true);
 
-        Ioc.Resolve<App.ICommand>(
-            "IoC.Register",
-            "Exception.Handler",
-            (object[] args) => handlerCommand.Object
-        ).Execute();
-
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue, scope);
+        var thread = new GameThread(queue, (cmd, ex) => handlerCommand.Object, scope);
 
         var failingCommand = new Mock<ICommand>();
         failingCommand.Setup(c => c.Execute()).Throws(new InvalidOperationException("Test exception"));
@@ -172,7 +168,7 @@ public class ThreadStopCommandsTests
     public void GameThread_Receive_AddsCommandToQueue()
     {
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
         var cmd = new Mock<ICommand>();
 
         thread.Receive(cmd.Object);
@@ -185,7 +181,7 @@ public class ThreadStopCommandsTests
     public void GameThread_Receive_ThrowsArgumentNullException_WhenCommandIsNull()
     {
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
 
         Assert.Throws<ArgumentNullException>(() => thread.Receive(null!));
     }
@@ -194,7 +190,7 @@ public class ThreadStopCommandsTests
     public void GameThread_ThrowsArgumentNullException_WhenExceptionHandlerIsNull()
     {
         var queue = new BlockingCollection<ICommand>();
-        Assert.Throws<ArgumentNullException>(() => new GameThread(queue, (Func<ICommand, Exception, ICommand>)null!));
+        Assert.Throws<ArgumentNullException>(() => new GameThread(queue, null!));
     }
 
     [Fact]
@@ -230,7 +226,7 @@ public class ThreadStopCommandsTests
         new RegisterIoCDependencyThreadStopCommands().Execute();
 
         var queue = new BlockingCollection<ICommand>();
-        var thread = new GameThread(queue);
+        var thread = new GameThread(queue, DefaultHandler);
 
         var hardStop = Ioc.Resolve<ICommand>("Commands.HardStop", thread);
         Assert.IsType<HardStopCommand>(hardStop);
