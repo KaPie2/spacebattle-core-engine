@@ -1,0 +1,7 @@
+    public class {{FactoryClassName}} : IAdapterFactory<{{InterfaceName}}>
+    {
+        public {{InterfaceName}} Create(IDictionary<string, object> obj)
+        {
+            return new {{AdapterClassName}}(obj);
+        }
+    }

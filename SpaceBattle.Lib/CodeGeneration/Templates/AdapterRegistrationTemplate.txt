@@ -1,0 +1,49 @@
+using System;
+using System.Collections.Generic;
+using App;
+using SpaceBattle.Lib;
+
+namespace SpaceBattle.Lib.Generated
+{
+    public sealed class {{RegistrationClassName}} : SpaceBattle.Lib.ICommand
+    {
+        private readonly string _sourceCode;
+        private readonly IEnumerable<(string Key, Func<object[], object> Strategy)> _attributeStrategies;
+
+        public {{RegistrationClassName}}(
+            string sourceCode,
+            IEnumerable<(string Key, Func<object[], object> Strategy)> attributeStrategies
+        )
+        {
+            _sourceCode = sourceCode;
+            _attributeStrategies = attributeStrategies;
+        }
+
+        public void Execute()
+        {
+            IAdapterFactory<{{InterfaceName}}> factory = new {{FactoryClassName}}();
+            Func<object[], object> createAdapter = args => factory.Create((IDictionary<string, object>)args[0]);
+            Func<object[], object> getSource = _ => _sourceCode;
+
+            Register("Adapters.{{InterfaceShortName}}", createAdapter);
+            Register("Adapters.Source.{{InterfaceShortName}}", getSource);
+
+            foreach (var (key, strategy) in _attributeStrategies)
+            {
+                try
+                {
+                    Register(key, strategy);
+                }
+                catch
+                {
+                    // Сохраняем ранее зарегистрированную стратегию.
+                }
+            }
+        }
+
+        private static void Register(string key, Func<object[], object> strategy)
+        {
+            Ioc.Resolve<App.ICommand>("IoC.Register", key, strategy).Execute();
+        }
+    }
+}
