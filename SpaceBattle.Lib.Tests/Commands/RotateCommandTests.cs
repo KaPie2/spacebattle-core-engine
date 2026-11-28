@@ -24,7 +24,7 @@ public class RotateCommandTests
     public void ThrowsExceptionIfAngleIsNull()
     {
         var rotatingObject = new Mock<IRotatingObject>();
-        rotatingObject.Setup(o => o.Angle).Returns((Angle)null);
+        rotatingObject.Setup(o => o.Angle).Returns((Angle)null!);
         rotatingObject.Setup(o => o.AngleVelocity).Returns(new Angle(new int[] { 1, 8 }));
 
         var cmd = new RotateCommand(rotatingObject.Object);
@@ -37,7 +37,7 @@ public class RotateCommandTests
     {
         var rotatingObject = new Mock<IRotatingObject>();
         rotatingObject.Setup(o => o.Angle).Returns(new Angle(new int[] { 1, 8 }));
-        rotatingObject.Setup(o => o.AngleVelocity).Returns((Angle)null);
+        rotatingObject.Setup(o => o.AngleVelocity).Returns((Angle)null!);
 
         var cmd = new RotateCommand(rotatingObject.Object);
 

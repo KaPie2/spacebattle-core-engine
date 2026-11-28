@@ -1,6 +1,6 @@
 # Space Battle: Game Engine Architecture
 
-[![CI Pipeline](https://github.com/KaPie2/OOAaD_4term/actions/workflows/ci.yml/badge.svg)](https://github.com/KaPie2/OOAaD_4term/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/KaPie2/spacebattle-core-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/KaPie2/spacebattle-core-engine/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/Coverage-%3E90%25-brightgreen.svg)]()
 
 
@@ -26,11 +26,12 @@
 | Папка в `SpaceBattle.Lib` | Содержимое |
 | --- | --- |
 | `CodeGeneration` | Генерация адаптеров, автоинъекция команд и регистрация фабрик в IoC. TXT-шаблоны находятся в `CodeGeneration/Templates`. |
-| `Commands` | Контракты команд, команды движения и поворота, макрокоманды и их стратегии. |
+| `Commands` | Контракты команд, команды движения и поворота, макрокоманды, команды остановки потока (`HardStopCommand`, `SoftStopCommand`) и сжигание топлива (`BurnFuelCommand`). |
 | `Collisions` | Проверка коллизий, пространственная сетка `SpatialGrid` и определение пересечений. |
-| `GameObjects` | Игровые объекты и контракты их свойств, например `IMovingObject` и `IRotatingObject`. |
+| `GameObjects` | Игровые объекты и интерфейсы: `IUObject`, `UObject`, `IMovingObject`, `IRotatingObject`, `IFuelable`. |
 | `Geometry` | Типы для геометрических расчётов, например `NVector` и `Angle`. |
 | `IoC` | Общие регистрации и инфраструктура IoC. |
 | `Threading` | Игровые потоки, очереди и отправка команд. |
+| `Transactions` | Менеджер транзакций (`ITransactionManager`, `TransactionManager`) для атомарных и согласованных изменений. |
 
 Тесты в `SpaceBattle.Lib.Tests` сгруппированы по тем же разделам. Сквозные сценарии находятся в `SpaceBattle.Lib.Tests/Integration`.
